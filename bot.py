@@ -26,6 +26,7 @@ from datetime import datetime
 
 load_dotenv()
 from features import register_feature_handlers, handle_feature_text
+from utility_features import register_utility_handlers
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ DEVELOPER_IDS = {
     if value.strip().isdigit()
 }
 BOT_NAME = "Qahtan"
-BOT_VERSION = "5.1.0"
+BOT_VERSION = "5.2.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
@@ -794,6 +795,14 @@ async def post_init(app):
         BotCommand("channels", "قنواتي"),
         BotCommand("publish", "نشر في قناة"),
         BotCommand("featurestats", "إحصائيات الميزات"),
+        BotCommand("commands", "قائمة الأوامر"),
+        BotCommand("qr", "إنشاء QR"),
+        BotCommand("checkurl", "فحص رابط"),
+        BotCommand("remind", "إنشاء تذكير"),
+        BotCommand("compress", "ضغط صورة"),
+        BotCommand("id", "معرفات الحساب"),
+        BotCommand("ping", "فحص السرعة"),
+        BotCommand("privacy", "الخصوصية"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -811,6 +820,7 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("mystats", mystats_command))
     app.add_handler(CommandHandler("chat", reset_chat))
     app.add_handler(CommandHandler("reset", reset_chat))
+    register_utility_handlers(app)
     register_feature_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

@@ -3,6 +3,10 @@ name: Run Qahtan bot
 on:
   workflow_dispatch:
 
+concurrency:
+  group: qahtan-telegram-bot
+  cancel-in-progress: true
+
 jobs:
   bot:
     runs-on: ubuntu-latest
