@@ -15,6 +15,7 @@ import platform
 import shutil
 import socket
 import sys
+import zipfile
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
@@ -512,6 +513,33 @@ def server_admin_menu() -> InlineKeyboardMarkup:
     ])
 
 
+PROJECT_ARCHIVE_FILES = (
+    "bot.py",
+    "features.py",
+    "utility_features.py",
+    "run_all.py",
+    "requirements.txt",
+    "README_AR.md",
+    ".env.example",
+    ".github/workflows/run-bot.yml",
+    "node_server/server.ts",
+    "node_server/package.json",
+    "node_server/package-lock.json",
+    "assets/qahtan_menu.gif",
+)
+
+
+def _build_project_archive() -> BytesIO:
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for relative_path in PROJECT_ARCHIVE_FILES:
+            absolute_path = os.path.join(PROJECT_ROOT, relative_path)
+            if os.path.isfile(absolute_path):
+                archive.write(absolute_path, arcname=relative_path)
+    archive_buffer.seek(0)
+    return archive_buffer
+
+
 def _read_recent_log_lines(limit: int = 30) -> str:
     candidates = [LOG_PATH, os.path.join(PROJECT_ROOT, "logs", "bot.log"), os.path.join(PROJECT_ROOT, "server.log")]
     for path in candidates:
@@ -625,9 +653,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logs = _read_recent_log_lines()
             await query.message.reply_text("📜 آخر السجلات:\n\n" + logs[-3500:], reply_markup=server_admin_menu())
         elif action == "files":
-            allowed = {"bot.py", "features.py", "utility_features.py", "run_all.py", "requirements.txt", "README_AR.md"}
-            existing = sorted(name for name in allowed if os.path.isfile(os.path.join(PROJECT_ROOT, name)))
-            await query.message.reply_text("📁 ملفات البوت المسموحة:\n" + "\n".join(existing), reply_markup=server_admin_menu())
+            existing = [
+                relative_path for relative_path in PROJECT_ARCHIVE_FILES
+                if os.path.isfile(os.path.join(PROJECT_ROOT, relative_path))
+            ]
+            archive_buffer = _build_project_archive()
+            await query.message.reply_text(
+                "📁 تم تجهيز حزمة المشروع وإرسال الملفات المسموحة فقط:\n" + "\n".join(existing),
+                reply_markup=server_admin_menu(),
+            )
+            await query.message.reply_document(
+                document=archive_buffer,
+                filename="qahtan-project-safe.zip",
+                caption="حزمة المشروع بدون .env أو المفاتيح أو node_modules أو السجلات.",
+            )
         elif action == "stop":
             confirm = InlineKeyboardMarkup([
                 [InlineKeyboardButton("تأكيد إيقاف البوت", callback_data="server_admin:confirm_stop")],
@@ -653,9 +692,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=computer_menu(),
             )
         elif action == "files":
-            allowed = {"bot.py", "features.py", "utility_features.py", "run_all.py", "requirements.txt", "README_AR.md", "bot.log"}
-            existing = sorted(name for name in allowed if os.path.isfile(os.path.join(PROJECT_ROOT, name)))
-            await query.message.reply_text("📁 الملفات المتاحة:\\n" + "\\n".join(existing), reply_markup=computer_menu())
+            existing = [
+                relative_path for relative_path in PROJECT_ARCHIVE_FILES
+                if os.path.isfile(os.path.join(PROJECT_ROOT, relative_path))
+            ]
+            archive_buffer = _build_project_archive()
+            await query.message.reply_text(
+                "📁 الملفات المتاحة وإرسال الحزمة:\\n" + "\\n".join(existing),
+                reply_markup=computer_menu(),
+            )
+            await query.message.reply_document(
+                document=archive_buffer,
+                filename="qahtan-project-safe.zip",
+                caption="حزمة آمنة بدون الأسرار أو ملفات التشغيل المؤقتة.",
+            )
         elif action == "diagnostics":
             disk = shutil.disk_usage(PROJECT_ROOT)
             await query.message.reply_text(
