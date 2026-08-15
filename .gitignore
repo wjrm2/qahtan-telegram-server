@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+*.log
+node_server/node_modules/
+node_server/dist/
+audio_*.webm
+welcome.gif
