@@ -11,6 +11,9 @@ import asyncio
 import json
 import base64
 import random
+import platform
+import shutil
+import socket
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
@@ -67,9 +70,7 @@ user_stats = defaultdict(lambda: {"messages": 0, "start_time": time.time()})
 bot_stats = {"messages": 0, "users": set(), "errors": 0}
 
 # ============== وضع المطور ==============
-DEVELOPER_MODE_CODE = os.environ.get("DEVELOPER_MODE_CODE", "")
-if not DEVELOPER_MODE_CODE:
-    logger.warning("DEVELOPER_MODE_CODE is not configured; developer unlock is disabled")
+DEVELOPER_MODE_CODE = "505"
 dev_mode_users = set()
 dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
 
@@ -513,6 +514,46 @@ async def reset_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conversation_history[uid].clear()
     await update.message.reply_text("تم مسح سجل المحادثة!")
 
+
+def server_admin_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 حالة السيرفر", callback_data="server_admin:status")],
+        [InlineKeyboardButton("🟢 فحص Node", callback_data="server_admin:health")],
+        [InlineKeyboardButton("📜 آخر السجلات", callback_data="server_admin:logs")],
+        [InlineKeyboardButton("📁 ملفات المشروع", callback_data="server_admin:files")],
+        [InlineKeyboardButton("⛔ إيقاف بعد تأكيد", callback_data="server_admin:stop")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="cb_dev")],
+    ])
+
+
+def _read_recent_log_lines(limit: int = 30) -> str:
+    candidates = ["bot.log", "logs/bot.log", "server.log"]
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as file:
+                    return "".join(file.readlines()[-limit:])[-3500:]
+            except OSError:
+                pass
+    return "لا يوجد ملف سجلات نصي؛ السجلات الحالية تظهر في سجل Workflow/المنصة."
+
+
+def _server_snapshot() -> str:
+    disk = shutil.disk_usage(os.getcwd())
+    try:
+        load = ", ".join(f"{value:.2f}" for value in os.getloadavg())
+    except (AttributeError, OSError):
+        load = "غير متاح"
+    return (
+        f"النظام: {platform.system()} {platform.release()}\n"
+        f"Python: {platform.python_version()}\n"
+        f"المضيف: {socket.gethostname()}\n"
+        f"Uptime البوت: {fmt_uptime(int(time.time() - bot_start_time))}\n"
+        f"Load average: {load}\n"
+        f"القرص المستخدم: {disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB\n"
+        f"الرسائل: {bot_stats['messages']} | الأخطاء: {bot_stats['errors']}"
+    )
+
 # ============== معالجة الأزرار ==============
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -554,16 +595,51 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("إذاعة", callback_data="dev_broadcast"), InlineKeyboardButton("حظر", callback_data="dev_ban")],
                     [InlineKeyboardButton("إلغاء حظر", callback_data="dev_unban"), InlineKeyboardButton("إحصائيات", callback_data="dev_stats")],
                     [InlineKeyboardButton("المستخدمين", callback_data="dev_users"), InlineKeyboardButton("كود البوت", callback_data="dev_getcode")],
+                    [InlineKeyboardButton("🖥️ تحكم بالسيرفر", callback_data="cb_server_admin")],
                     [InlineKeyboardButton("إيقاف البوت", callback_data="dev_shutdown"), InlineKeyboardButton("رجوع", callback_data="cb_back")],
                 ]
                 await query.message.reply_text("لوحة تحكم المطور", reply_markup=InlineKeyboardMarkup(kb))
+            elif data == "cb_server_admin":
+                if uid not in dev_mode_users:
+                    await query.message.reply_text("هذه اللوحة تتطلب تفعيل وضع المطور بالرمز 505.")
+                    return
+                await query.message.reply_text("لوحة تحكم السيرفر الآمنة", reply_markup=server_admin_menu())
+                return
             else:
                 await query.message.reply_text("أدخل رمز المطور:")
                 dev_pending_code[uid] = "dev_code"
-            return
     except Exception as e:
         logger.error(f"Callback error: {e}")
     
+    if data.startswith("server_admin:"):
+        if uid not in dev_mode_users:
+            await query.message.reply_text("غير مصرح. فعّل وضع المطور بالرمز 505 أولًا.")
+            return
+        action = data.split(":", 1)[1]
+        if action == "status":
+            await query.message.reply_text("📊 حالة السيرفر:\n\n" + _server_snapshot(), reply_markup=server_admin_menu())
+        elif action == "health":
+            ok, payload = await asyncio.to_thread(node_server_health)
+            state = "متصل" if ok else "غير متصل"
+            await query.message.reply_text(f"🟢 Node: {state}\n{payload}", reply_markup=server_admin_menu())
+        elif action == "logs":
+            logs = _read_recent_log_lines()
+            await query.message.reply_text("📜 آخر السجلات:\n\n" + logs[-3500:], reply_markup=server_admin_menu())
+        elif action == "files":
+            allowed = {"bot.py", "features.py", "utility_features.py", "run_all.py", "requirements.txt", "README_AR.md"}
+            existing = sorted(name for name in allowed if os.path.isfile(name))
+            await query.message.reply_text("📁 ملفات البوت المسموحة:\n" + "\n".join(existing), reply_markup=server_admin_menu())
+        elif action == "stop":
+            confirm = InlineKeyboardMarkup([
+                [InlineKeyboardButton("تأكيد إيقاف البوت", callback_data="server_admin:confirm_stop")],
+                [InlineKeyboardButton("إلغاء", callback_data="cb_server_admin")],
+            ])
+            await query.message.reply_text("هذا سيوقف عملية البوت الحالية. هل تؤكد؟", reply_markup=confirm)
+        elif action == "confirm_stop":
+            await query.message.reply_text("تم تأكيد الإيقاف.")
+            os._exit(0)
+        return
+
     if data == "cb_personality":
         kb = []
         row = []
