@@ -42,7 +42,7 @@ DEVELOPER_IDS = {
     if value.strip().isdigit()
 }
 BOT_NAME = "Qahtan"
-BOT_VERSION = "5.2.0"
+BOT_VERSION = "5.3.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
@@ -407,20 +407,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("لوحة المطور", callback_data="cb_dev")],
     ]
     
-    # GIF جون سنو المتحرك يحمل رسالة الترحيب وقائمة الأزرار.
-    try:
-        if os.path.exists(MENU_ANIMATION_PATH):
+    # نرسل الحركة منفصلة، ثم نرسل الأزرار في رسالة مستقلة لضمان ظهورها دائمًا.
+    if os.path.exists(MENU_ANIMATION_PATH):
+        try:
             with open(MENU_ANIMATION_PATH, "rb") as gif:
-                await update.message.reply_animation(
-                    animation=gif,
-                    caption=welcome,
-                    reply_markup=InlineKeyboardMarkup(kb),
-                )
-        else:
-            await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
-    except Exception:
-        logger.exception("Animated welcome failed")
-        await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
+                await update.message.reply_animation(animation=gif, caption="جون سنو — قحطان")
+        except Exception:
+            logger.exception("Animated welcome failed")
+    await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
 
 async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
