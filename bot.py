@@ -14,6 +14,7 @@ import random
 import platform
 import shutil
 import socket
+import sys
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
@@ -28,9 +29,18 @@ import requests
 from datetime import datetime
 
 load_dotenv()
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
 from utility_features import register_utility_handlers
-logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_PATH, encoding="utf-8"),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 # ============== الإعدادات ==============
@@ -47,7 +57,7 @@ PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
+ASSET_DIR = os.path.join(PROJECT_ROOT, "assets")
 MENU_ANIMATION_PATH = os.path.join(ASSET_DIR, "qahtan_menu.gif")
 
 MAX_MSG = 4000
@@ -496,13 +506,14 @@ def server_admin_menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🟢 فحص Node", callback_data="server_admin:health")],
         [InlineKeyboardButton("📜 آخر السجلات", callback_data="server_admin:logs")],
         [InlineKeyboardButton("📁 ملفات المشروع", callback_data="server_admin:files")],
+        [InlineKeyboardButton("🖥️ كمبيوتر آمن", callback_data="server_admin:computer")],
         [InlineKeyboardButton("⛔ إيقاف بعد تأكيد", callback_data="server_admin:stop")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="cb_dev")],
     ])
 
 
 def _read_recent_log_lines(limit: int = 30) -> str:
-    candidates = ["bot.log", "logs/bot.log", "server.log"]
+    candidates = [LOG_PATH, os.path.join(PROJECT_ROOT, "logs", "bot.log"), os.path.join(PROJECT_ROOT, "server.log")]
     for path in candidates:
         if os.path.isfile(path):
             try:
@@ -513,8 +524,18 @@ def _read_recent_log_lines(limit: int = 30) -> str:
     return "لا يوجد ملف سجلات نصي؛ السجلات الحالية تظهر في سجل Workflow/المنصة."
 
 
+def computer_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🐍 معلومات Python", callback_data="computer:python")],
+        [InlineKeyboardButton("🐧 معلومات Linux", callback_data="computer:linux")],
+        [InlineKeyboardButton("📁 ملفات المشروع المسموحة", callback_data="computer:files")],
+        [InlineKeyboardButton("🩺 تشخيص آمن", callback_data="computer:diagnostics")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="cb_server_admin")],
+    ])
+
+
 def _server_snapshot() -> str:
-    disk = shutil.disk_usage(os.getcwd())
+    disk = shutil.disk_usage(PROJECT_ROOT)
     try:
         load = ", ".join(f"{value:.2f}" for value in os.getloadavg())
     except (AttributeError, OSError):
@@ -597,13 +618,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif action == "health":
             ok, payload = await asyncio.to_thread(node_server_health)
             state = "متصل" if ok else "غير متصل"
-            await query.message.reply_text(f"🟢 Node: {state}\n{payload}", reply_markup=server_admin_menu())
+            await query.message.reply_text(f"🟢 Node: {state}\\n{payload}", reply_markup=server_admin_menu())
+        elif action == "computer":
+            await query.message.reply_text("🖥️ كمبيوتر آمن\\nلا يوجد ترمنال مفتوح؛ اختر فحصًا محددًا:", reply_markup=computer_menu())
         elif action == "logs":
             logs = _read_recent_log_lines()
             await query.message.reply_text("📜 آخر السجلات:\n\n" + logs[-3500:], reply_markup=server_admin_menu())
         elif action == "files":
             allowed = {"bot.py", "features.py", "utility_features.py", "run_all.py", "requirements.txt", "README_AR.md"}
-            existing = sorted(name for name in allowed if os.path.isfile(name))
+            existing = sorted(name for name in allowed if os.path.isfile(os.path.join(PROJECT_ROOT, name)))
             await query.message.reply_text("📁 ملفات البوت المسموحة:\n" + "\n".join(existing), reply_markup=server_admin_menu())
         elif action == "stop":
             confirm = InlineKeyboardMarkup([
@@ -614,8 +637,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif action == "confirm_stop":
             await query.message.reply_text("تم تأكيد الإيقاف.")
             os._exit(0)
+    if data.startswith("computer:"):
+        if uid not in dev_mode_users:
+            await query.message.reply_text("غير مصرح. فعّل وضع المطور بالرمز 505 أولًا.")
+            return
+        action = data.split(":", 1)[1]
+        if action == "python":
+            await query.message.reply_text(
+                f"🐍 Python\\nالإصدار: {platform.python_version()}\\nالمفسر: {sys.executable}\\nالمشروع: {PROJECT_ROOT}",
+                reply_markup=computer_menu(),
+            )
+        elif action == "linux":
+            await query.message.reply_text(
+                f"🐧 Linux\\nالنظام: {platform.system()} {platform.release()}\\nالمضيف: {socket.gethostname()}\\nالمعمارية: {platform.machine()}",
+                reply_markup=computer_menu(),
+            )
+        elif action == "files":
+            allowed = {"bot.py", "features.py", "utility_features.py", "run_all.py", "requirements.txt", "README_AR.md", "bot.log"}
+            existing = sorted(name for name in allowed if os.path.isfile(os.path.join(PROJECT_ROOT, name)))
+            await query.message.reply_text("📁 الملفات المتاحة:\\n" + "\\n".join(existing), reply_markup=computer_menu())
+        elif action == "diagnostics":
+            disk = shutil.disk_usage(PROJECT_ROOT)
+            await query.message.reply_text(
+                f"🩺 التشخيص الآمن\\nالقرص المتاح: {disk.free // (1024**3)}GB\\n"
+                f"الذاكرة التقريبية: {getattr(__import__('os'), 'getloadavg', lambda: ('غير متاح',))()}",
+                reply_markup=computer_menu(),
+            )
         return
-
     if data == "cb_personality":
         kb = []
         row = []
