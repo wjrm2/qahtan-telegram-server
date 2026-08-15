@@ -264,7 +264,6 @@ async function startServer() {
               <h1 style="color: #ffffff; margin: 0; font-size: 24px;">OMAR HOST</h1>
             </div>
             <div style="padding: 30px; background-color: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 15px 15px;">
-              <h2 style="color: #1f2937; margin-top: 0;">مرحباً بك!</h2>
               <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">شكراً لتسجيلك في منصة OMAR HOST. يرجى استخدام الرمز التالي لإتمام عملية التحقق من بريدك الإلكتروني:</p>
               <div style="background-color: #f3f4f6; padding: 20px; border-radius: 12px; text-align: center; margin: 30px 0;">
                 <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #2563eb; font-family: monospace;">${code}</span>
