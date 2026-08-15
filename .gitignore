@@ -8,3 +8,5 @@ node_server/node_modules/
 node_server/dist/
 audio_*.webm
 welcome.gif
+data/
+*.sqlite3

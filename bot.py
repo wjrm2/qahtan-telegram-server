@@ -25,6 +25,7 @@ import requests
 from datetime import datetime
 
 load_dotenv()
+from features import register_feature_handlers, handle_feature_text
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ DEVELOPER_IDS = {
     if value.strip().isdigit()
 }
 BOT_NAME = "Qahtan"
-BOT_VERSION = "5.0.0"
+BOT_VERSION = "5.1.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
@@ -390,7 +391,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("محادثة ذكية", callback_data="cb_chat")],
         # Row 2 - Music
         [InlineKeyboardButton("بحث اغاني", callback_data="cb_music")],
-        # Row 3 - Personalization
+        # Row 3 - Additional features
+        [InlineKeyboardButton("ميزات إضافية", callback_data="feature:menu")],
+        # Row 4 - Personalization
         [InlineKeyboardButton("تغيير الشخصية", callback_data="cb_personality"), 
          InlineKeyboardButton("تغيير اللهجة", callback_data="cb_dialect")],
         # Row 4 - Info
@@ -525,6 +528,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kb = [
                 [InlineKeyboardButton("محادثة ذكية", callback_data="cb_chat")],
                 [InlineKeyboardButton("بحث اغاني", callback_data="cb_music")],
+                [InlineKeyboardButton("ميزات إضافية", callback_data="feature:menu")],
                 [InlineKeyboardButton("تغيير الشخصية", callback_data="cb_personality"), 
                  InlineKeyboardButton("تغيير اللهجة", callback_data="cb_dialect")],
                 [InlineKeyboardButton("إحصائياتي", callback_data="cb_mystats"), 
@@ -667,6 +671,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     msg = update.message.text.strip()
     uid = update.effective_user.id
+
+    if await handle_feature_text(update, context):
+        return
     
     if uid in banned_users:
         await update.message.reply_text("أنت محظور")
@@ -780,6 +787,13 @@ async def post_init(app):
         BotCommand("about", "معلومات"),
         BotCommand("dev", "وضع المطور"),
         BotCommand("server", "فحص خادم الاستضافة"),
+        BotCommand("features", "الميزات الإضافية"),
+        BotCommand("tiktok", "تحميل TikTok"),
+        BotCommand("colorbuttons", "تلوين أزرار Python"),
+        BotCommand("linkchannel", "ربط قناة"),
+        BotCommand("channels", "قنواتي"),
+        BotCommand("publish", "نشر في قناة"),
+        BotCommand("featurestats", "إحصائيات الميزات"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -797,6 +811,7 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("mystats", mystats_command))
     app.add_handler(CommandHandler("chat", reset_chat))
     app.add_handler(CommandHandler("reset", reset_chat))
+    register_feature_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
