@@ -642,7 +642,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         action = data.split(":", 1)[1]
         if action == "status":
-            await query.message.reply_text("📊 حالة السيرفر:\n\n" + _server_snapshot(), reply_markup=server_admin_menu())
+            try:
+                snapshot = _server_snapshot()
+                await query.message.reply_text("📊 حالة السيرفر:\n\n" + snapshot, reply_markup=server_admin_menu())
+            except Exception:
+                logger.exception("Server status callback failed")
+                await query.message.reply_text("تعذر قراءة حالة السيرفر حاليًا.", reply_markup=server_admin_menu())
         elif action == "health":
             ok, payload = await asyncio.to_thread(node_server_health)
             state = "متصل" if ok else "غير متصل"
@@ -653,20 +658,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logs = _read_recent_log_lines()
             await query.message.reply_text("📜 آخر السجلات:\n\n" + logs[-3500:], reply_markup=server_admin_menu())
         elif action == "files":
-            existing = [
-                relative_path for relative_path in PROJECT_ARCHIVE_FILES
-                if os.path.isfile(os.path.join(PROJECT_ROOT, relative_path))
-            ]
-            archive_buffer = _build_project_archive()
-            await query.message.reply_text(
-                "📁 تم تجهيز حزمة المشروع وإرسال الملفات المسموحة فقط:\n" + "\n".join(existing),
-                reply_markup=server_admin_menu(),
-            )
-            await query.message.reply_document(
-                document=archive_buffer,
-                filename="qahtan-project-safe.zip",
-                caption="حزمة المشروع بدون .env أو المفاتيح أو node_modules أو السجلات.",
-            )
+            try:
+                existing = [
+                    relative_path for relative_path in PROJECT_ARCHIVE_FILES
+                    if os.path.isfile(os.path.join(PROJECT_ROOT, relative_path))
+                ]
+                archive_buffer = _build_project_archive()
+                await query.message.reply_document(
+                    document=InputFile(archive_buffer, filename="qahtan-project-safe.zip"),
+                    caption="حزمة المشروع بدون .env أو المفاتيح أو node_modules أو السجلات.\n\nالملفات: " + ", ".join(existing),
+                    reply_markup=server_admin_menu(),
+                )
+            except Exception:
+                logger.exception("Project archive callback failed")
+                await query.message.reply_text("تعذر تجهيز ملف المشروع حاليًا.", reply_markup=server_admin_menu())
         elif action == "stop":
             confirm = InlineKeyboardMarkup([
                 [InlineKeyboardButton("تأكيد إيقاف البوت", callback_data="server_admin:confirm_stop")],
@@ -702,8 +707,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=computer_menu(),
             )
             await query.message.reply_document(
-                document=archive_buffer,
-                filename="qahtan-project-safe.zip",
+                document=InputFile(archive_buffer, filename="qahtan-project-safe.zip"),
                 caption="حزمة آمنة بدون الأسرار أو ملفات التشغيل المؤقتة.",
             )
         elif action == "diagnostics":
