@@ -42,7 +42,7 @@ DEVELOPER_IDS = {
     if value.strip().isdigit()
 }
 BOT_NAME = "Qahtan"
-BOT_VERSION = "5.4.0"
+BOT_VERSION = "5.5.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
@@ -586,15 +586,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("إيقاف البوت", callback_data="dev_shutdown"), InlineKeyboardButton("رجوع", callback_data="cb_back")],
                 ]
                 await query.message.reply_text("لوحة تحكم المطور", reply_markup=InlineKeyboardMarkup(kb))
-            elif data == "cb_server_admin":
-                if uid not in dev_mode_users:
-                    await query.message.reply_text("هذه اللوحة تتطلب تفعيل وضع المطور بالرمز 505.")
-                    return
-                await query.message.reply_text("لوحة تحكم السيرفر الآمنة", reply_markup=server_admin_menu())
-                return
             else:
                 await query.message.reply_text("أدخل رمز المطور:")
                 dev_pending_code[uid] = "dev_code"
+            return
+        elif data == "cb_server_admin":
+            if uid not in dev_mode_users:
+                await query.message.reply_text("هذه اللوحة تتطلب تفعيل وضع المطور بالرمز 505.")
+                return
+            await query.message.reply_text("لوحة تحكم السيرفر الآمنة", reply_markup=server_admin_menu())
+            return
     except Exception as e:
         logger.error(f"Callback error: {e}")
     
