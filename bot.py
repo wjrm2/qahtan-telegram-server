@@ -42,7 +42,7 @@ DEVELOPER_IDS = {
     if value.strip().isdigit()
 }
 BOT_NAME = "Qahtan"
-BOT_VERSION = "5.3.0"
+BOT_VERSION = "5.4.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
@@ -368,6 +368,7 @@ async def dev_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("إذاعة", callback_data="dev_broadcast"), InlineKeyboardButton("حظر مستخدم", callback_data="dev_ban")],
             [InlineKeyboardButton("إلغاء الحظر", callback_data="dev_unban"), InlineKeyboardButton("إحصائيات شاملة", callback_data="dev_stats")],
             [InlineKeyboardButton("قائمة المستخدمين", callback_data="dev_users"), InlineKeyboardButton("تحميل الكود", callback_data="dev_getcode")],
+            [InlineKeyboardButton("🖥️ تحكم بالسيرفر", callback_data="cb_server_admin")],
             [InlineKeyboardButton("إيقاف البوت", callback_data="dev_shutdown"), InlineKeyboardButton("رجوع", callback_data="cb_back")],
         ]
         await update.message.reply_text("لوحة تحكم المطور", reply_markup=InlineKeyboardMarkup(kb))
@@ -378,16 +379,6 @@ async def dev_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_stats[uid]["start_time"] = time.time()
-    
-    welcome = """أهلاً بك في قحطان v5.2.0
-
-أنا بوت ذكاء اصطناعي متعدد المواهب:
-- محادثة ذكية مع ذاكرة مؤقتة
-- شخصيات ولهجات عربية متعددة
-- بحث وتحميل المقاطع الصوتية
-- أدوات للمستخدم والمطور
-
-اختر من القائمة أو أرسل رسالتك مباشرة."""
     
     # Modern buttons with different layouts
     kb = [
@@ -404,17 +395,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("إحصائياتي", callback_data="cb_mystats"), 
          InlineKeyboardButton("مساعدة", callback_data="cb_help")],
         # Row 5 - Developer
-        [InlineKeyboardButton("لوحة المطور", callback_data="cb_dev")],
+        [InlineKeyboardButton("لوحة المطور", callback_data="dev_panel")],
     ]
     
-    # نرسل الحركة منفصلة، ثم نرسل الأزرار في رسالة مستقلة لضمان ظهورها دائمًا.
+    # عرض GIF جون سنو فقط، مع إرفاق قائمة الأزرار نفسها دون نص ترحيبي.
     if os.path.exists(MENU_ANIMATION_PATH):
         try:
             with open(MENU_ANIMATION_PATH, "rb") as gif:
-                await update.message.reply_animation(animation=gif, caption="جون سنو — قحطان")
+                await update.message.reply_animation(animation=gif, reply_markup=InlineKeyboardMarkup(kb))
+            return
         except Exception:
             logger.exception("Animated welcome failed")
-    await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
+    # بديل عند تعذر تحميل GIF مع إبقاء الأزرار متاحة.
+    await update.message.reply_text("\u200b", reply_markup=InlineKeyboardMarkup(kb))
 
 async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -583,7 +576,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             await query.message.reply_text("اختر:", reply_markup=InlineKeyboardMarkup(kb))
             return
-        elif data == "cb_dev":
+        elif data in {"cb_dev", "dev_panel"}:
             if uid in dev_mode_users:
                 kb = [
                     [InlineKeyboardButton("إذاعة", callback_data="dev_broadcast"), InlineKeyboardButton("حظر", callback_data="dev_ban")],
@@ -779,6 +772,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("إذاعة", callback_data="dev_broadcast"), InlineKeyboardButton("حظر", callback_data="dev_ban")],
                     [InlineKeyboardButton("إلغاء حظر", callback_data="dev_unban"), InlineKeyboardButton("إحصائيات", callback_data="dev_stats")],
                     [InlineKeyboardButton("المستخدمين", callback_data="dev_users"), InlineKeyboardButton("إيقاف", callback_data="dev_shutdown")],
+                    [InlineKeyboardButton("🖥️ تحكم بالسيرفر", callback_data="cb_server_admin")],
                     [InlineKeyboardButton("رجوع", callback_data="cb_back")],
                 ]
                 await update.message.reply_text("تم تفعيل وضع المطور!", reply_markup=InlineKeyboardMarkup(kb))
