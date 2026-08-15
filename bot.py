@@ -44,6 +44,8 @@ PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
+MENU_ANIMATION_PATH = os.path.join(ASSET_DIR, "qahtan_menu.gif")
 
 MAX_MSG = 4000
 RATE_MSGS = 15
@@ -376,7 +378,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_stats[uid]["start_time"] = time.time()
     
-    welcome = """أهلاً بك في قحطان v5.0.0
+    welcome = """أهلاً بك في قحطان v5.2.0
 
 أنا بوت ذكاء اصطناعي متعدد المواهب:
 - محادثة ذكية مع ذاكرة مؤقتة
@@ -404,11 +406,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("لوحة المطور", callback_data="cb_dev")],
     ]
     
-    # Send welcome GIF with text as caption
+    # GIF جون سنو المتحرك يحمل رسالة الترحيب وقائمة الأزرار.
     try:
-        with open("welcome.gif", "rb") as gif:
-            await update.message.reply_animation(animation=gif, caption=welcome, reply_markup=InlineKeyboardMarkup(kb))
-    except:
+        if os.path.exists(MENU_ANIMATION_PATH):
+            with open(MENU_ANIMATION_PATH, "rb") as gif:
+                await update.message.reply_animation(
+                    animation=gif,
+                    caption=welcome,
+                    reply_markup=InlineKeyboardMarkup(kb),
+                )
+        else:
+            await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
+    except Exception:
+        logger.exception("Animated welcome failed")
         await update.message.reply_text(welcome, reply_markup=InlineKeyboardMarkup(kb))
 
 async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
