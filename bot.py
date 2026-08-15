@@ -1,7 +1,4 @@
-"""
-قحطان - بوت ذكاء اصطناعي متعدد المواهب
-نسخة محسنة v5.0
-"""
+"""Qahtan bot core."""
 
 import logging
 import os
@@ -353,11 +350,6 @@ async def get_ai_response(uid, text):
     except Exception:
         logger.exception("AI response error")
         return "عذراً، حدث خطأ. حاول لاحقاً."
-
-# ============== رسالة الترحيب ==============
-def get_welcome_html():
-    # محفوظ للتوافق مع أي استدعاء قديم، لكن الترحيب الحالي بلا نص.
-    return "\u200b"
 
 # ============== أوامر البوت ==============
 async def dev_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
