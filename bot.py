@@ -34,7 +34,7 @@ LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
 from community_features import register_community_handlers
 from utility_features import register_utility_handlers
-from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
+from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY, category_from_token
 from group_admin import register_group_admin_handlers, handle_group_text
 from ai_router import chat as router_chat, configured_provider_names, AIProviderError
 logging.basicConfig(
@@ -663,13 +663,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(catalog_check_text(), reply_markup=catalog_categories())
             return
         elif data.startswith("svc_cat:"):
-            category = data.split(":", 1)[1]
+            token = data.split(":", 1)[1]
+            category = category_from_token(token)
+            if not category:
+                await query.edit_message_text("التصنيف غير موجود.", reply_markup=catalog_categories())
+                return
             await query.edit_message_text(f"🔗 {category}\nاختر خدمة لعرض المتطلبات:", reply_markup=catalog_page(0, category))
             return
         elif data.startswith("svc_page:"):
             parts = data.split(":", 2)
-            page = int(parts[1])
-            category = parts[2] if len(parts) > 2 else None
+            try:
+                page = max(0, int(parts[1]))
+            except (ValueError, IndexError):
+                await query.edit_message_text("رقم الصفحة غير صحيح.", reply_markup=catalog_categories())
+                return
+            category = category_from_token(parts[2]) if len(parts) > 2 else None
+            if len(parts) > 2 and not category:
+                await query.edit_message_text("التصنيف غير موجود.", reply_markup=catalog_categories())
+                return
             await query.edit_message_text("🔗 الخدمات\nاختر خدمة لعرض المتطلبات:", reply_markup=catalog_page(page, category))
             return
         elif data.startswith("svc:"):

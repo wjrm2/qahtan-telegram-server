@@ -35,6 +35,9 @@ _GROUPS = {
     "الخرائط والطقس": "Google Maps,Mapbox,HERE,OpenStreetMap,Foursquare,WeatherAPI,OpenWeather,AccuWeather,FlightAware,OpenSky",
     "الأمن والمراقبة": "1Password,Bitwarden,HashiCorp Vault,Cloudflare Zero Trust,Snyk,Dependabot,Sentry,Datadog,UptimeRobot,SonarQube",
     "الأتمتة والأجهزة": "Zapier,Make,n8n,GitHub Actions,Home Assistant,Philips Hue,HomeKit,SmartThings,IFTTT,MQTT",
+    "إدارة القروبات": "Rose Bot,MissRose,Combot,Group Help,Controller Bot,Shieldy,Skeddy Admin,Telegram Admin Bot,Group Butler,ChatKeeper",
+    "حماية القروبات": "CAS Anti-Spam,TG-Spam,Samurai Anti-Spam,eGenix Antispam,SpamWatch,Combot Anti-Spam,Shieldy CAPTCHA,LinkGuard,MediaLock,ModGuard",
+    "ألعاب القروبات": "Quiz Bot,Trivia Bot,Gamee,Quizarium,Werewolf Bot,Chess Bot,Connect Four Bot,Economy Bot,Word Game Bot,Team Battle Bot",
 }
 
 
@@ -54,12 +57,22 @@ def _make_services() -> List[Service]:
 SERVICES = _make_services()
 SERVICE_BY_KEY = {service.key: service for service in SERVICES}
 PAGE_SIZE = 10
+# Telegram callback_data is limited to 64 UTF-8 bytes. Never place a long
+# Arabic category name directly in callback_data; use short stable tokens.
+_CATEGORY_TOKENS = {category: f"c{index:02d}" for index, category in enumerate(_GROUPS)}
+_TOKEN_TO_CATEGORY = {token: category for category, token in _CATEGORY_TOKENS.items()}
+
+def category_token(category: str) -> str:
+    return _CATEGORY_TOKENS[category]
+
+def category_from_token(token: str) -> str | None:
+    return _TOKEN_TO_CATEGORY.get(token)
 
 
 def catalog_categories() -> InlineKeyboardMarkup:
     rows = []
     for category in _GROUPS:
-        rows.append([InlineKeyboardButton(f"🔗 {category}", callback_data=f"svc_cat:{category}")])
+        rows.append([InlineKeyboardButton(f"🔗 {category}", callback_data=f"svc_cat:{category_token(category)}")])
     rows.append([InlineKeyboardButton("🧪 فحص الكتالوج", callback_data="svc_check")])
     rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="cb_back")])
     return InlineKeyboardMarkup(rows)
@@ -73,10 +86,10 @@ def catalog_page(page: int = 0, category: str | None = None) -> InlineKeyboardMa
         rows.append([InlineKeyboardButton(f"🔗 {service.name}", callback_data=f"svc:{service.key}")])
     nav = []
     if start > 0:
-        suffix = f":{category}" if category else ""
+        suffix = f":{category_token(category)}" if category else ""
         nav.append(InlineKeyboardButton("◀️ السابق", callback_data=f"svc_page:{page-1}{suffix}"))
     if start + PAGE_SIZE < len(items):
-        suffix = f":{category}" if category else ""
+        suffix = f":{category_token(category)}" if category else ""
         nav.append(InlineKeyboardButton("التالي ▶️", callback_data=f"svc_page:{page+1}{suffix}"))
     if nav:
         rows.append(nav)
