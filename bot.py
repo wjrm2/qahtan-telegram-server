@@ -38,6 +38,7 @@ from service_catalog import catalog_categories, catalog_page, service_text, cata
 from group_admin import register_group_admin_handlers, _no_permissions, _all_permissions, handle_group_text
 from ai_router import chat as router_chat, configured_provider_names, AIProviderError
 from bridge_client import AzControlBridge
+from webapp_protocol import parse_webapp_payload
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -1182,15 +1183,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = update.effective_message.web_app_data.data if update.effective_message and update.effective_message.web_app_data else ""
     try:
-        payload = json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
-        await update.effective_message.reply_text("بيانات لوحة عز غير صحيحة.")
-        return
-    action = str(payload.get("action", ""))
-    data = payload.get("payload", {}) if isinstance(payload.get("payload", {}), dict) else {}
-    allowed_actions = {"open_service", "open_section", "request_health"}
-    if action not in allowed_actions:
-        await update.effective_message.reply_text("الإجراء غير مدعوم.")
+        action, data = parse_webapp_payload(raw)
+    except ValueError as exc:
+        message = "بيانات لوحة عز غير صحيحة." if str(exc) == "invalid_payload" else "الإجراء غير مدعوم."
+        await update.effective_message.reply_text(message)
         return
     if action == "open_service":
         key = str(data.get("key", ""))
