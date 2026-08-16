@@ -976,6 +976,36 @@ async def _handle_script_document(update: Update, context: ContextTypes.DEFAULT_
     return True
 
 
+async def _handle_script_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    uid = update.effective_user.id
+    msg = (update.message.text or "").strip()
+    if uid not in script_mode_users or not msg:
+        return False
+    code_markers = ("import ", "from ", "def ", "class ", "print(", "reply_text", "BotCommand(", "```", "\\n")
+    if not any(marker in msg for marker in code_markers):
+        await update.message.reply_text("وضع 505F مفتوح. أرسل ملف .py أو الصق كود Python واضحًا، وليس أمرًا عاديًا.")
+        return True
+    if not AZ_AGENT_TOKEN:
+        await update.message.reply_text("وكيل az- غير مفعّل في هذا التشغيل.")
+        return True
+    source = msg.replace("```python", "").replace("```", "").strip().encode("utf-8")
+    filename = "telegram_snippet.py"
+    payload = {"filename": filename, "content_b64": base64.b64encode(source).decode(), "requirements": [], "timeout_seconds": 120, "network": False}
+    try:
+        response = await asyncio.to_thread(requests.post, f"{AZ_AGENT_URL}/jobs", headers={"Authorization": f"Bearer {AZ_AGENT_TOKEN}"}, json=payload, timeout=20)
+        if not response.ok:
+            await update.message.reply_text(f"تعذر إرسال الكود إلى وكيل az-: {response.text[:500]}")
+            return True
+        job_id = response.json().get("job_id")
+        script_jobs[uid] = job_id
+        await update.message.reply_text("استلمت الكود وبدأت تشغيله داخل العزل.")
+        context.application.create_task(_poll_script_job(context.bot, update.effective_chat.id, uid, job_id))
+    except Exception as exc:
+        logger.exception("Script text submission failed")
+        await update.message.reply_text(f"تعذر إرسال الكود: {exc}")
+    return True
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -986,7 +1016,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.replace("/", "").strip().lower() == "505f":
         await _script_mode_menu(update, context)
         return
-
+    if await _handle_script_text(update, context):
+        return
     if await handle_feature_text(update, context):
         return
 
