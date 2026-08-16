@@ -95,9 +95,13 @@ bot_stats = {"messages": 0, "users": set(), "errors": 0}
 # ============== وضع المطور ==============
 DEVELOPER_MODE_CODE = os.environ.get("DEVELOPER_MODE_CODE", "505")
 SCRIPT_MODE_CODE = "505F"
+COMPUTER_MODE_CODE = "505C"
+DISABLE_ALL_CODE = "505B"
 dev_mode_users = set()
 script_mode_users = set()
+computer_mode_users = set()
 script_jobs = {}
+computer_sessions = {}
 dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
 
 # ============== الشخصيات ==============
@@ -909,6 +913,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os._exit(0)
 
 # ============== معالجة الرسائل ==============
+async def _disable_all_modes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    script_mode_users.discard(uid)
+    computer_mode_users.discard(uid)
+    pending_followups.pop(uid, None)
+    job_id = script_jobs.pop(uid, None)
+    computer_sessions.pop(uid, None)
+    await update.message.reply_text("تم تعطيل جميع الأوضاع والجلسات لهذا الحساب.")
+
+
+async def _computer_mode_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    if uid not in DEVELOPER_IDS:
+        await update.message.reply_text("وضع الكمبيوتر متاح للمطور فقط.")
+        return
+    computer_mode_users.add(uid)
+    script_mode_users.discard(uid)
+    computer_sessions[uid] = {"status": "enabled", "computer_use": False}
+    await update.message.reply_text("تم تفعيل وضع الكمبيوتر. البيئة الرسومية غير موصولة بعد؛ سيُفعّل التحكم الفعلي عند ربط VM أو harness معزول. استخدم 505B لتعطيل كل الأوضاع.")
+
+
 async def _script_mode_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     if uid not in DEVELOPER_IDS:
@@ -1013,8 +1038,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.strip()
     uid = update.effective_user.id
 
-    if msg.replace("/", "").strip().lower() == "505f":
+    normalized_code = msg.replace("/", "").strip().upper()
+    if normalized_code == SCRIPT_MODE_CODE:
         await _script_mode_menu(update, context)
+        return
+    if normalized_code == COMPUTER_MODE_CODE:
+        await _computer_mode_menu(update, context)
+        return
+    if normalized_code == DISABLE_ALL_CODE:
+        await _disable_all_modes(update, context)
         return
     if await _handle_script_text(update, context):
         return
@@ -1181,6 +1213,9 @@ async def post_init(app):
         BotCommand("unpin", "إلغاء التثبيت"),
         BotCommand("lock", "قفل الكتابة"),
         BotCommand("unlock", "فتح الكتابة"),
+        BotCommand("505f", "تشغيل وضع السكربتات"),
+        BotCommand("505c", "تفعيل وضع الكمبيوتر"),
+        BotCommand("505b", "تعطيل جميع الأوضاع"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -1191,6 +1226,8 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("dev", dev_command))
     app.add_handler(CommandHandler("505f", _script_mode_menu))
+    app.add_handler(CommandHandler("505c", _computer_mode_menu))
+    app.add_handler(CommandHandler("505b", _disable_all_modes))
     app.add_handler(CommandHandler("server", server_command))
     app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("stats", stats_command))
