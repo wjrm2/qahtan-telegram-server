@@ -18,7 +18,7 @@ from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 from flask import Flask, jsonify, request
@@ -107,6 +107,7 @@ computer_sessions = {}
 dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
 bridge_protection_enabled = False
 bridge_client = None
+bridge_telegram_bot = None
 
 # ============== الشخصيات ==============
 PERSONALITIES = {
@@ -1205,6 +1206,8 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_bridge_action(action: dict):
     global bridge_protection_enabled
     action_name = str(action.get("action", ""))
+    raw_payload = action.get("payload", {})
+    payload = json.loads(raw_payload) if isinstance(raw_payload, str) and raw_payload else (raw_payload if isinstance(raw_payload, dict) else {})
     if action_name == "request_health":
         return {"detail": f"bot=online version={BOT_VERSION} uptime={int(time.time() - bot_start_time)}s"}
     if action_name == "refresh_catalog":
@@ -1215,6 +1218,31 @@ async def handle_bridge_action(action: dict):
     if action_name == "disable_protection":
         bridge_protection_enabled = False
         return {"detail": "group_protection=disabled"}
+    if action_name in {"sync_groups", "refresh_permissions", "send_group_report", "group_check", "group_mute", "group_unmute"}:
+        group_id = payload.get("group_id")
+        if not group_id or bridge_telegram_bot is None:
+            raise ValueError("group_id and Telegram bridge are required")
+        me = await bridge_telegram_bot.get_me()
+        bot_member = await bridge_telegram_bot.get_chat_member(chat_id=int(group_id), user_id=me.id)
+        if bot_member.status not in {"administrator", "creator"}:
+            raise PermissionError("bot_is_not_group_admin")
+        if action_name in {"group_check", "group_mute", "group_unmute"}:
+            target_user = payload.get("target_user")
+            if not target_user:
+                raise ValueError("target_user is required")
+            target_member = await bridge_telegram_bot.get_chat_member(chat_id=int(group_id), user_id=int(target_user))
+            if action_name == "group_check":
+                return {"detail": f"group={group_id}; target={target_user}; target_status={target_member.status}; bot_status={bot_member.status}"}
+            if action_name == "group_mute":
+                await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=ChatPermissions(can_send_messages=False))
+                return {"detail": f"group={group_id}; target={target_user}; action=muted"}
+            await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=ChatPermissions(can_send_messages=True, can_send_audios=True, can_send_documents=True, can_send_photos=True, can_send_videos=True, can_send_video_notes=True, can_send_voice_notes=True, can_send_polls=True, can_add_web_page_previews=True, can_change_info=False, can_invite_users=True, can_pin_messages=False, can_manage_topics=False))
+            return {"detail": f"group={group_id}; target={target_user}; action=unmuted"}
+        if action_name == "sync_groups":
+            return {"detail": f"group={group_id}; group_admin_handlers=loaded; bot_status={bot_member.status}"}
+        if action_name == "refresh_permissions":
+            return {"detail": f"group={group_id}; permission_policy=telegram_admin_required; bot_status={bot_member.status}"}
+        return {"detail": f"group={group_id}; group_report=authorized"}
     if action_name in {"prepare_505f", "prepare_505c"}:
         # A web request must not activate a personal execution session without a Telegram-user binding.
         return {"detail": f"{action_name}=accepted_for_manual_binding; telegram_user_binding_required"}
@@ -1282,7 +1310,8 @@ async def post_init(app):
         BotCommand("505b", "تعطيل جميع الأوضاع"),
     ]
     await app.bot.set_my_commands(commands)
-    global bridge_client
+    global bridge_client, bridge_telegram_bot
+    bridge_telegram_bot = app.bot
     bridge_client = AzControlBridge(handle_bridge_action)
     await bridge_client.start()
     await bridge_client.publish_states([
