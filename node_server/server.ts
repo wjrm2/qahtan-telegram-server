@@ -220,7 +220,28 @@ async function startServer() {
 
   // API routes go here
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({
+      status: 'ok',
+      uptime: Math.floor(process.uptime()),
+      aiProvider: process.env.AI_PROVIDER || 'متعدد',
+      catalogCount: 170,
+    });
+  });
+  app.get('/api/catalog', (req, res) => {
+    const groups: Record<string, string[]> = {
+      'إدارة القروبات': ['Rose Bot','MissRose','Combot','Group Help','Controller Bot','Shieldy','Skeddy Admin','Telegram Admin Bot','Group Butler','ChatKeeper'],
+      'حماية القروبات': ['CAS Anti-Spam','TG-Spam','Samurai Anti-Spam','eGenix Antispam','SpamWatch','Combot Anti-Spam','Shieldy CAPTCHA','LinkGuard','MediaLock','ModGuard'],
+      'ألعاب القروبات': ['Quiz Bot','Trivia Bot','Gamee','Quizarium','Werewolf Bot','Chess Bot','Connect Four Bot','Economy Bot','Word Game Bot','Team Battle Bot'],
+    };
+    const services = Object.entries(groups).flatMap(([category, names], groupIndex) => names.map((name, index) => ({
+      key: `${151 + groupIndex * 10 + index}`,
+      name,
+      category,
+      auth: category === 'ألعاب القروبات' ? 'لا يحتاج اتصالًا خارجيًا' : 'صلاحية Telegram / API اختياري',
+      requirement: category === 'ألعاب القروبات' ? 'جلسة لعب وتخزين نقاط افتراضية فقط' : 'إضافة عز مشرفًا وموافقة الصانع قبل الإجراء',
+      status: 'بطاقة متطلبات',
+    })));
+    res.json({ services, catalogCount: 170, categories: 17 });
   });
 
   app.post('/api/send-verification', async (req, res) => {
