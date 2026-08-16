@@ -53,6 +53,9 @@ jobs:
           repository: wjrm2/az-
           path: az-agent
 
+      - name: Create ephemeral az agent token
+        run: echo "AZ_AGENT_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Setup az agent
         run: |
           python -m pip install -r az-agent/requirements.txt
