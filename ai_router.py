@@ -50,7 +50,12 @@ def _headers(provider: Provider) -> dict[str, str]:
     return headers
 
 
-def _request(provider: Provider, messages: list[dict[str, Any]], *, temperature: float = 0.4, timeout: int = 45) -> str:
+def _request(provider: Provider, messages: list[dict[str, Any]], *, temperature: float = 0.4, timeout: int | None = None) -> str:
+    if timeout is None:
+        try:
+            timeout = max(5, int(os.getenv("AI_TIMEOUT_SECONDS", "20")))
+        except ValueError:
+            timeout = 20
     model = os.getenv(provider.model_env, provider.default_model).strip()
     response = requests.post(
         f"{provider.base_url.rstrip('/')}/chat/completions",

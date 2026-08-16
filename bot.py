@@ -1253,6 +1253,7 @@ def run_telegram_bot():
     register_feature_handlers(app)
     register_community_handlers(app)
     register_group_admin_handlers(app)
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(svc_catalog|svc_check|svc_cat:|svc_page:|svc:)") )
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, _handle_script_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
