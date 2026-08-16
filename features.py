@@ -254,6 +254,38 @@ async def link_channel_command(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text("أضف البوت مشرفًا في القناة، ثم أرسل @username القناة أو رابط t.me العام.")
 
 
+async def channel_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    raw = " ".join(context.args).strip()
+    if not raw:
+        await update.message.reply_text("الاستخدام: /channelinfo @username أو رابط القناة")
+        return
+    target = raw.split()[0]
+    if target.startswith("https://t.me/"):
+        target = "@" + target.rstrip("/").rsplit("/", 1)[-1]
+    elif not target.startswith("@"):
+        target = "@" + target
+    try:
+        chat = await context.bot.get_chat(target)
+        count = await context.bot.get_chat_member_count(chat.id)
+        me = await context.bot.get_me()
+        bot_member = await context.bot.get_chat_member(chat.id, me.id)
+        admins = {"administrator", "creator"}
+        bot_rights = {}
+        if bot_member.status in admins:
+            for key in ("can_post_messages", "can_edit_messages", "can_delete_messages", "can_restrict_members", "can_promote_members", "can_invite_users", "can_pin_messages"):
+                bot_rights[key] = bool(getattr(bot_member, key, False))
+        username = getattr(chat, "username", None)
+        link = f"https://t.me/{username}" if username else "لا يوجد رابط عام"
+        await update.message.reply_text(
+            f"بيانات القناة المؤكدة:\nالاسم: {chat.title or 'بدون اسم'}\n"
+            f"المعرف: {chat.id}\nالرابط: {link}\nعدد الأعضاء: {count}\n"
+            f"حالة البوت: {bot_member.status}\nالصلاحيات: {bot_rights or 'غير مشرف'}"
+        )
+    except Exception as exc:
+        logger.exception("Channel info failed")
+        await update.message.reply_text(f"تعذر التحقق من القناة عبر Telegram: {exc}")
+
+
 async def channels_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     channels = _user_channels(update.effective_user.id)
     if not channels:
@@ -339,6 +371,7 @@ async def _handle_channel_link(update: Update, context: ContextTypes.DEFAULT_TYP
     username = match.group(1)
     try:
         chat = await context.bot.get_chat(f"@{username}")
+        member_count = await context.bot.get_chat_member_count(chat.id)
         me = await context.bot.get_me()
         bot_member = await context.bot.get_chat_member(chat.id, me.id)
         user_member = await context.bot.get_chat_member(chat.id, update.effective_user.id)
@@ -356,7 +389,7 @@ async def _handle_channel_link(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             db.commit()
         _set_state(update.effective_user.id, None)
-        await update.message.reply_text("تم ربط القناة بنجاح. استخدم /channels ثم /publish.")
+        await update.message.reply_text(f"تم ربط القناة بنجاح. عدد الأعضاء المؤكد الآن: {member_count}. استخدم /channelinfo @{username} للتحقق لاحقًا.")
     except Exception:
         logger.exception("Channel link failed")
         await update.message.reply_text("تعذر ربط القناة. تأكد من أنها عامة وأن البوت مضاف كمشرف.")
@@ -444,6 +477,7 @@ def register_feature_handlers(application) -> None:
     application.add_handler(CommandHandler("colorbuttons", color_command))
     application.add_handler(CommandHandler("linkchannel", link_channel_command))
     application.add_handler(CommandHandler("channels", channels_command))
+    application.add_handler(CommandHandler("channelinfo", channel_info_command))
     application.add_handler(CommandHandler("publish", publish_command))
     application.add_handler(CommandHandler("featurestats", feature_stats_command))
     application.add_handler(CallbackQueryHandler(feature_callback, pattern=r"^feature:"))
