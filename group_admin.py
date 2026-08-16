@@ -64,7 +64,12 @@ async def group_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "أوامر إدارة القروب:\n"
         "/gstatus حالة القروب\n/gadmins المشرفون\n/gid المعرفات\n"
         "/warn تحذير و /warnings الإنذارات\n/mute [دقائق] كتم\n/unmute فك الكتم\n"
-        "/ban حظر و /unban فك الحظر\n/kick طرد\n/promote رفع مشرف و /demote خفضه\n/del حذف رسالة بالرد\n"
+        "/ban حظر و /unban فك الحظر\n/kick طرد\n"
+        "/promote_full رفع مشرف بكامل الصلاحيات\n/demote_full تنزيل مشرف بالكامل\n"
+        "/promote_kick رفع مشرف بصلاحية الطرد\n/demote_kick تنزيل صلاحية الطرد\n"
+        "/promote_ban رفع مشرف بصلاحية الحظر\n/demote_ban تنزيل صلاحية الحظر\n"
+        "/promote_restrict رفع مشرف بصلاحية التقييد\n/demote_restrict تنزيل صلاحية التقييد\n"
+        "/del حذف رسالة بالرد\n"
         "/pin تثبيت بالرد و /unpin إلغاء التثبيت\n/lock قفل الكتابة و /unlock فتحها\n"
         "/welcome تشغيل الترحيب أو /welcome off\n\n" + _target_help()
     )
@@ -165,6 +170,90 @@ async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await context.bot.ban_chat_member(update.effective_chat.id, user.id)
     await update.effective_message.reply_text(f"تم حظر {user.first_name}.")
+
+
+def _rights_profile(profile: str) -> dict:
+    base = {
+        "can_manage_chat": False, "can_change_info": False, "can_post_messages": False,
+        "can_edit_messages": False, "can_delete_messages": False, "can_invite_users": False,
+        "can_restrict_members": False, "can_pin_messages": False, "can_promote_members": False,
+        "can_manage_video_chats": False, "can_manage_topics": False,
+    }
+    if profile == "full":
+        return {key: True for key in base}
+    if profile == "kick":
+        base["can_restrict_members"] = True
+        return base
+    if profile == "ban":
+        base["can_restrict_members"] = True
+        return base
+    if profile == "restrict":
+        base["can_restrict_members"] = True
+        return base
+    return base
+
+
+async def _promote_with_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, profile: str, label: str):
+    if not await _caller_admin(update, context) or not await _bot_admin(update, context, "can_promote_members"):
+        return
+    user = _target(update, context)
+    if not user:
+        await update.effective_message.reply_text("استخدم الأمر بالرد على رسالة العضو؛ لا تكتب @username وحده.")
+        return
+    if user.id == update.effective_user.id:
+        await update.effective_message.reply_text("لا يمكنك رفع نفسك.")
+        return
+    try:
+        await context.bot.promote_chat_member(chat_id=update.effective_chat.id, user_id=user.id, **_rights_profile(profile))
+        await update.effective_message.reply_text(f"تم رفع {user.first_name} مشرفًا: {label}.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر رفع العضو: {exc}")
+
+
+async def _demote_with_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, profile: str, label: str):
+    if not await _caller_admin(update, context) or not await _bot_admin(update, context, "can_promote_members"):
+        return
+    user = _target(update, context)
+    if not user:
+        await update.effective_message.reply_text("استخدم الأمر بالرد على رسالة المشرف.")
+        return
+    try:
+        await context.bot.promote_chat_member(chat_id=update.effective_chat.id, user_id=user.id, **_rights_profile(profile))
+        await update.effective_message.reply_text(f"تم تنزيل صلاحيات {user.first_name}: {label}.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر تنزيل الصلاحيات: {exc}")
+
+
+async def promote_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _promote_with_profile(update, context, "full", "كامل الصلاحيات")
+
+
+async def demote_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _demote_with_profile(update, context, "none", "عضو عادي")
+
+
+async def promote_kick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _promote_with_profile(update, context, "kick", "صلاحية الطرد والتقييد")
+
+
+async def demote_kick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _demote_with_profile(update, context, "none", "إزالة صلاحية الطرد")
+
+
+async def promote_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _promote_with_profile(update, context, "ban", "صلاحية الحظر والتقييد")
+
+
+async def demote_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _demote_with_profile(update, context, "none", "إزالة صلاحية الحظر")
+
+
+async def promote_restrict(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _promote_with_profile(update, context, "restrict", "صلاحية الكتم والتقييد")
+
+
+async def demote_restrict(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _demote_with_profile(update, context, "none", "إزالة صلاحية التقييد")
 
 
 async def promote(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -292,7 +381,13 @@ def register_group_admin_handlers(application) -> None:
     commands = {
         "ghelp": group_help, "gstatus": group_status, "gadmins": list_admins,
         "warn": warn, "warnings": warnings, "mute": mute, "unmute": unmute,
-        "ban": ban, "unban": unban, "kick": kick, "promote": promote, "demote": demote, "del": delete_message,
+        "ban": ban, "unban": unban, "kick": kick,
+        "promote": promote, "demote": demote,
+        "promote_full": promote_full, "demote_full": demote_full,
+        "promote_kick": promote_kick, "demote_kick": demote_kick,
+        "promote_ban": promote_ban, "demote_ban": demote_ban,
+        "promote_restrict": promote_restrict, "demote_restrict": demote_restrict,
+        "del": delete_message,
         "pin": pin, "unpin": unpin, "lock": lock, "unlock": unlock,
     }
     for name, handler in commands.items():
