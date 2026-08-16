@@ -6,9 +6,9 @@ WORKFLOW = (ROOT / ".github/workflows/run-bot.yml").read_text(encoding="utf-8")
 
 
 def test_webapp_uses_reply_keyboard_and_https_guard():
-    assert "KeyboardButton" in BOT
-    assert "ReplyKeyboardMarkup" in BOT
+    assert "InlineKeyboardButton" in BOT
     assert "web_app=WebAppInfo" in BOT
+    assert "def main_menu_markup" in BOT
     assert 'webapp_url.startswith("https://")' in BOT
 
 

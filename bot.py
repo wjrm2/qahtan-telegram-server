@@ -18,7 +18,7 @@ from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand, InputFile, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 from flask import Flask, jsonify, request
@@ -451,21 +451,11 @@ async def dev_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 HEADER_IMAGE_PATH = os.path.join(ASSET_DIR, "qahtan_header.gif")
 
 
-def webapp_reply_markup() -> ReplyKeyboardMarkup | None:
-    webapp_url = os.getenv("AZ_WEBAPP_URL", "").strip()
-    if not webapp_url.startswith("https://"):
-        return None
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton("فتح لوحة عز الحديثة", web_app=WebAppInfo(url=webapp_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="افتح لوحة عز الحديثة",
-    )
-
-
 def main_menu_markup() -> InlineKeyboardMarkup:
+    webapp_url = os.getenv("AZ_WEBAPP_URL", "").strip()
+    webapp_button = InlineKeyboardButton("فتح لوحة عز الحديثة", web_app=WebAppInfo(url=webapp_url)) if webapp_url.startswith("https://") else InlineKeyboardButton("لوحة عز الحديثة تحتاج رابط HTTPS", callback_data="cb_webapp_setup")
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("لوحة عز الحديثة: استخدم زر لوحة WebApp", callback_data="cb_webapp_setup")],
+        [webapp_button],
         [InlineKeyboardButton("💬 متابعة المحادثة", callback_data="cb_chat")],
         [InlineKeyboardButton("🔗 كتالوج الخدمات والمتطلبات", callback_data="svc_catalog")],
         [InlineKeyboardButton("🧩 الميزات", callback_data="feature:menu"), InlineKeyboardButton("🎵 بحث أغاني", callback_data="cb_music")],
@@ -482,9 +472,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "عز جاهز. اكتب طلبك مباشرة، وسأتابع سياق المحادثة وأوضح المتطلبات قبل أي ربط أو تنفيذ.\n\n"
         "اختر خدمة من الكتالوج لعرض حالتها ومتطلبات تفعيلها."
     )
-    webapp_markup = webapp_reply_markup()
-    if webapp_markup:
-        await update.message.reply_text("استخدم زر لوحة عز الحديثة لفتح الواجهة وإرسال الأوامر إلى البوت.", reply_markup=webapp_markup)
     if os.path.exists(HEADER_IMAGE_PATH):
         try:
             with open(HEADER_IMAGE_PATH, "rb") as image:
