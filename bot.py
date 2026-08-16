@@ -18,7 +18,7 @@ from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 from flask import Flask, jsonify, request
@@ -38,7 +38,6 @@ from service_catalog import catalog_categories, catalog_page, service_text, cata
 from group_admin import register_group_admin_handlers, _no_permissions, _all_permissions, handle_group_text
 from ai_router import chat as router_chat, configured_provider_names, AIProviderError
 from bridge_client import AzControlBridge
-from webapp_protocol import parse_webapp_payload
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -66,8 +65,6 @@ DEVELOPER_NAME = "فيصل العراقي"
 DEVELOPER_USERNAME = "@rccjc"
 BOT_VERSION = "5.5.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
-NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
-NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
 AZ_AGENT_URL = os.environ.get("AZ_AGENT_URL", "http://127.0.0.1:8787").rstrip("/")
 AZ_AGENT_TOKEN = os.environ.get("AZ_AGENT_TOKEN", "").strip()
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -313,14 +310,6 @@ def validate_configuration():
         raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
 
 
-def node_server_health():
-    try:
-        response = requests.get(f"{NODE_SERVER_URL}/api/health", timeout=3)
-        return response.ok, response.json()
-    except requests.RequestException as exc:
-        logger.warning("Node server health check failed: %s", exc)
-        return False, {"status": "unreachable"}
-
 
 def safe_remove(path):
     try:
@@ -453,10 +442,7 @@ HEADER_IMAGE_PATH = os.path.join(ASSET_DIR, "qahtan_header.gif")
 
 
 def main_menu_markup() -> InlineKeyboardMarkup:
-    webapp_url = os.getenv("AZ_WEBAPP_URL", "").strip()
-    webapp_button = InlineKeyboardButton("فتح لوحة عز الحديثة", web_app=WebAppInfo(url=webapp_url)) if webapp_url.startswith("https://") else InlineKeyboardButton("لوحة عز الحديثة تحتاج رابط HTTPS", callback_data="cb_webapp_setup")
     return InlineKeyboardMarkup([
-        [webapp_button],
         [InlineKeyboardButton("💬 متابعة المحادثة", callback_data="cb_chat")],
         [InlineKeyboardButton("🔗 كتالوج الخدمات والمتطلبات", callback_data="svc_catalog")],
         [InlineKeyboardButton("🧩 الميزات", callback_data="feature:menu"), InlineKeyboardButton("🎵 بحث أغاني", callback_data="cb_music")],
@@ -482,14 +468,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("Header image failed")
     await update.message.reply_text(caption, reply_markup=main_menu_markup())
 
-async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_dev(uid):
-        await update.message.reply_text("هذا الأمر متاح للمطور فقط.")
-        return
-    ok, data = await asyncio.to_thread(node_server_health)
-    status = "متصل" if ok else "غير متصل"
-    await update.message.reply_text(f"خادم Node: {status}\\nالرابط: {NODE_SERVER_URL}\\nالرد: {data}")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -580,7 +558,6 @@ async def reset_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def server_admin_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 حالة السيرفر", callback_data="server_admin:status")],
-        [InlineKeyboardButton("🟢 فحص Node", callback_data="server_admin:health")],
         [InlineKeyboardButton("📜 آخر السجلات", callback_data="server_admin:logs")],
         [InlineKeyboardButton("📁 ملفات المشروع", callback_data="server_admin:files")],
         [InlineKeyboardButton("🖥️ كمبيوتر آمن", callback_data="server_admin:computer")],
@@ -598,9 +575,6 @@ PROJECT_ARCHIVE_FILES = (
     "README_AR.md",
     ".env.example",
     ".github/workflows/run-bot.yml",
-    "node_server/server.ts",
-    "node_server/package.json",
-    "node_server/package-lock.json",
     "assets/qahtan_menu.gif",
     "assets/qahtan_header.gif",
     "service_catalog.py",
@@ -751,10 +725,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logger.exception("Server status callback failed")
                 await query.message.reply_text("تعذر قراءة حالة السيرفر حاليًا.", reply_markup=server_admin_menu())
-        elif action == "health":
-            ok, payload = await asyncio.to_thread(node_server_health)
-            state = "متصل" if ok else "غير متصل"
-            await query.message.reply_text(f"🟢 Node: {state}\\n{payload}", reply_markup=server_admin_menu())
         elif action == "computer":
             await query.message.reply_text("🖥️ كمبيوتر آمن\\nلا يوجد ترمنال مفتوح؛ اختر فحصًا محددًا:", reply_markup=computer_menu())
         elif action == "logs":
@@ -1179,26 +1149,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_stats["errors"] += 1
         await update.message.reply_text("عذراً، حدث خطأ. حاول لاحقاً.")
 
-# ============== إعداد البوت ==============
-async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw = update.effective_message.web_app_data.data if update.effective_message and update.effective_message.web_app_data else ""
-    try:
-        action, data = parse_webapp_payload(raw)
-    except ValueError as exc:
-        message = "بيانات لوحة عز غير صحيحة." if str(exc) == "invalid_payload" else "الإجراء غير مدعوم."
-        await update.effective_message.reply_text(message)
-        return
-    if action == "open_service":
-        key = str(data.get("key", ""))
-        service = SERVICE_BY_KEY.get(key)
-        await update.effective_message.reply_text(service_text(service), parse_mode="HTML" if service else None) if service else update.effective_message.reply_text("الخدمة غير موجودة في كتالوج عز.")
-        return
-    if action == "request_health":
-        await update.effective_message.reply_text("لوحة عز متصلة. استخدم الأزرار داخل اللوحة للوصول إلى الخدمات.")
-        return
-    await update.effective_message.reply_text("تم استلام طلب لوحة عز.")
-
-
 async def handle_bridge_action(action: dict):
     global bridge_protection_enabled
     action_name = str(action.get("action", ""))
@@ -1332,7 +1282,6 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("505f", _script_mode_menu))
     app.add_handler(CommandHandler("505c", _computer_mode_menu))
     app.add_handler(CommandHandler("505b", _disable_all_modes))
-    app.add_handler(CommandHandler("server", server_command))
     app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("personality", personality_command))
@@ -1346,7 +1295,6 @@ def run_telegram_bot():
     register_group_admin_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(svc_catalog|svc_check|svc_cat:|svc_page:|svc:)") )
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, webapp_data_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, _handle_script_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     

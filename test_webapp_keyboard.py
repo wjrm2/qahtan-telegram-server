@@ -1,3 +1,4 @@
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -5,19 +6,18 @@ BOT = (ROOT / "bot.py").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/run-bot.yml").read_text(encoding="utf-8")
 
 
-def test_webapp_uses_reply_keyboard_and_https_guard():
-    assert "InlineKeyboardButton" in BOT
-    assert "web_app=WebAppInfo" in BOT
-    assert "def main_menu_markup" in BOT
-    assert 'webapp_url.startswith("https://")' in BOT
+class WebAppDetachTests(unittest.TestCase):
+    def test_webapp_is_detached_from_bot_menu_and_handlers(self):
+        self.assertIn("def main_menu_markup", BOT)
+        self.assertNotIn("WebAppInfo", BOT)
+        self.assertNotIn("web_app=", BOT)
+        self.assertNotIn("async def webapp_data_handler", BOT)
+        self.assertNotIn("filters.StatusUpdate.WEB_APP_DATA", BOT)
+        self.assertNotIn("فتح لوحة عز الحديثة", BOT)
+
+    def test_workflow_does_not_pass_webapp_url_to_bot(self):
+        self.assertNotIn("AZ_WEBAPP_URL", WORKFLOW)
 
 
-def test_webapp_data_handler_is_registered():
-    assert "async def webapp_data_handler" in BOT
-    assert "filters.StatusUpdate.WEB_APP_DATA" in BOT
-    assert "allowed_actions" in BOT
-
-
-def test_workflow_passes_webapp_url_without_secret_in_source():
-    assert "AZ_WEBAPP_URL: ${{ vars.AZ_WEBAPP_URL }}" in WORKFLOW
-    assert "AZ_WEBAPP_URL: ${{ secrets" not in WORKFLOW
+if __name__ == "__main__":
+    unittest.main()
