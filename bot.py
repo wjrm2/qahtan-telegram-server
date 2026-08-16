@@ -32,6 +32,7 @@ LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
 from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
+from group_admin import register_group_admin_handlers
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -1023,6 +1024,21 @@ async def post_init(app):
         BotCommand("id", "معرفات الحساب"),
         BotCommand("ping", "فحص السرعة"),
         BotCommand("privacy", "الخصوصية"),
+        BotCommand("ghelp", "أوامر إدارة القروب"),
+        BotCommand("gstatus", "حالة القروب"),
+        BotCommand("gadmins", "مشرفو القروب"),
+        BotCommand("warn", "تحذير عضو"),
+        BotCommand("warnings", "إنذارات عضو"),
+        BotCommand("mute", "كتم عضو"),
+        BotCommand("unmute", "فك الكتم"),
+        BotCommand("ban", "حظر عضو"),
+        BotCommand("unban", "فك الحظر"),
+        BotCommand("kick", "طرد عضو"),
+        BotCommand("del", "حذف رسالة"),
+        BotCommand("pin", "تثبيت رسالة"),
+        BotCommand("unpin", "إلغاء التثبيت"),
+        BotCommand("lock", "قفل الكتابة"),
+        BotCommand("unlock", "فتح الكتابة"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -1042,6 +1058,7 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("reset", reset_chat))
     register_utility_handlers(app)
     register_feature_handlers(app)
+    register_group_admin_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
