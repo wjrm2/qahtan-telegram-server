@@ -18,7 +18,7 @@ from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo, ChatPermissions
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 from flask import Flask, jsonify, request
@@ -35,7 +35,7 @@ from features import register_feature_handlers, handle_feature_text
 from community_features import register_community_handlers
 from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY, category_from_token
-from group_admin import register_group_admin_handlers, handle_group_text
+from group_admin import register_group_admin_handlers, _no_permissions, _all_permissions, handle_group_text
 from ai_router import chat as router_chat, configured_provider_names, AIProviderError
 from bridge_client import AzControlBridge
 logging.basicConfig(
@@ -1234,9 +1234,9 @@ async def handle_bridge_action(action: dict):
             if action_name == "group_check":
                 return {"detail": f"group={group_id}; target={target_user}; target_status={target_member.status}; bot_status={bot_member.status}"}
             if action_name == "group_mute":
-                await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=ChatPermissions(can_send_messages=False))
+                await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=_no_permissions())
                 return {"detail": f"group={group_id}; target={target_user}; action=muted"}
-            await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=ChatPermissions(can_send_messages=True, can_send_audios=True, can_send_documents=True, can_send_photos=True, can_send_videos=True, can_send_video_notes=True, can_send_voice_notes=True, can_send_polls=True, can_add_web_page_previews=True, can_change_info=False, can_invite_users=True, can_pin_messages=False, can_manage_topics=False))
+            await bridge_telegram_bot.restrict_chat_member(chat_id=int(group_id), user_id=int(target_user), permissions=_all_permissions())
             return {"detail": f"group={group_id}; target={target_user}; action=unmuted"}
         if action_name == "sync_groups":
             return {"detail": f"group={group_id}; group_admin_handlers=loaded; bot_status={bot_member.status}"}

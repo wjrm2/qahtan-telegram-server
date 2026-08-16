@@ -10,9 +10,10 @@ from bridge_client import AzControlBridge
 
 class BridgeHandler(BaseHTTPRequestHandler):
     results = []
+    action = "prepare_505f"
 
     def do_GET(self):
-        body = json.dumps({"actions": [{"id": 7, "action": "prepare_505f", "payload": json.dumps({"source": "test"})}]}).encode()
+        body = json.dumps({"actions": [{"id": 7, "action": BridgeHandler.action, "payload": json.dumps({"source": "test"})}]}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -30,7 +31,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
 
 class BridgeClientIntegration(unittest.TestCase):
-    def test_pull_and_report_result(self):
+    def run_action(self, action_name):
+        BridgeHandler.action = action_name
         server = ThreadingHTTPServer(("127.0.0.1", 0), BridgeHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -40,16 +42,17 @@ class BridgeClientIntegration(unittest.TestCase):
         os.environ["AZ_CONTROL_BRIDGE_TOKEN"] = "integration-token"
 
         async def handler(_action):
-            return {"detail": "prepare_505f=accepted_for_test"}
+            return {"detail": f"{action_name}=accepted_for_test"}
 
         try:
             client = AzControlBridge(handler)
             actions = client._get_actions()
             asyncio.run(client._process(actions[0]))
             self.assertEqual(BridgeHandler.results[-1]["status"], "succeeded")
-            self.assertIn("prepare_505f", BridgeHandler.results[-1]["details"])
+            self.assertIn(action_name, BridgeHandler.results[-1]["details"])
         finally:
             server.shutdown()
+            server.server_close()
             if old_url is None:
                 os.environ.pop("AZ_CONTROL_API_URL", None)
             else:
@@ -58,6 +61,12 @@ class BridgeClientIntegration(unittest.TestCase):
                 os.environ.pop("AZ_CONTROL_BRIDGE_TOKEN", None)
             else:
                 os.environ["AZ_CONTROL_BRIDGE_TOKEN"] = old_token
+
+    def test_pull_and_report_505f(self):
+        self.run_action("prepare_505f")
+
+    def test_pull_and_report_505c(self):
+        self.run_action("prepare_505c")
 
 
 if __name__ == "__main__":
