@@ -32,6 +32,7 @@ load_dotenv()
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
+from community_features import register_community_handlers
 from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
 from group_admin import register_group_admin_handlers, handle_group_text
@@ -1173,6 +1174,7 @@ async def post_init(app):
         BotCommand("dev", "وضع المطور"),
         BotCommand("server", "فحص خادم الاستضافة"),
         BotCommand("features", "الميزات الإضافية"),
+        BotCommand("community", "إدارة وحماية وألعاب القروبات"),
         BotCommand("tiktok", "تحميل TikTok"),
         BotCommand("colorbuttons", "تلوين أزرار Python"),
         BotCommand("linkchannel", "ربط قناة"),
@@ -1238,6 +1240,7 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("reset", reset_chat))
     register_utility_handlers(app)
     register_feature_handlers(app)
+    register_community_handlers(app)
     register_group_admin_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, _handle_script_document))
