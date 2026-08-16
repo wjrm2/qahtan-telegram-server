@@ -18,7 +18,7 @@ from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, InputFile, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 from flask import Flask, jsonify, request
@@ -448,7 +448,10 @@ HEADER_IMAGE_PATH = os.path.join(ASSET_DIR, "qahtan_header.gif")
 
 
 def main_menu_markup() -> InlineKeyboardMarkup:
+    webapp_url = os.getenv("AZ_WEBAPP_URL", "").strip()
+    webapp_button = InlineKeyboardButton("فتح لوحة عز الحديثة", web_app=WebAppInfo(url=webapp_url)) if webapp_url.startswith("https://") else InlineKeyboardButton("لوحة عز الحديثة تحتاج رابط HTTPS", callback_data="cb_webapp_setup")
     return InlineKeyboardMarkup([
+        [webapp_button],
         [InlineKeyboardButton("💬 متابعة المحادثة", callback_data="cb_chat")],
         [InlineKeyboardButton("🔗 كتالوج الخدمات والمتطلبات", callback_data="svc_catalog")],
         [InlineKeyboardButton("🧩 الميزات", callback_data="feature:menu"), InlineKeyboardButton("🎵 بحث أغاني", callback_data="cb_music")],
@@ -1172,6 +1175,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("عذراً، حدث خطأ. حاول لاحقاً.")
 
 # ============== إعداد البوت ==============
+async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw = update.effective_message.web_app_data.data if update.effective_message and update.effective_message.web_app_data else ""
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        await update.effective_message.reply_text("بيانات لوحة عز غير صحيحة.")
+        return
+    action = str(payload.get("action", ""))
+    data = payload.get("payload", {}) if isinstance(payload.get("payload", {}), dict) else {}
+    allowed_actions = {"open_service", "open_section", "request_health"}
+    if action not in allowed_actions:
+        await update.effective_message.reply_text("الإجراء غير مدعوم.")
+        return
+    if action == "open_service":
+        key = str(data.get("key", ""))
+        service = SERVICE_BY_KEY.get(key)
+        await update.effective_message.reply_text(service_text(service), parse_mode="HTML" if service else None) if service else update.effective_message.reply_text("الخدمة غير موجودة في كتالوج عز.")
+        return
+    if action == "request_health":
+        await update.effective_message.reply_text("لوحة عز متصلة. استخدم الأزرار داخل اللوحة للوصول إلى الخدمات.")
+        return
+    await update.effective_message.reply_text("تم استلام طلب لوحة عز.")
+
+
 async def post_init(app):
     commands = [
         BotCommand("start", "بدء البوت"),
@@ -1255,6 +1282,7 @@ def run_telegram_bot():
     register_group_admin_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(svc_catalog|svc_check|svc_cat:|svc_page:|svc:)") )
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, webapp_data_handler))
     app.add_handler(MessageHandler(filters.Document.ALL, _handle_script_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
