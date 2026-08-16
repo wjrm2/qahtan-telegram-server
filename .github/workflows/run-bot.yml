@@ -21,7 +21,7 @@ jobs:
       GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
       DEVELOPER_IDS: ${{ secrets.DEVELOPER_IDS }}
       DEVELOPER_MODE_CODE: ${{ secrets.DEVELOPER_MODE_CODE }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       EMAIL_USER: ${{ secrets.EMAIL_USER }}
       EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
