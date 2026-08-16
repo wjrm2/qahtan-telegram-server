@@ -37,6 +37,7 @@ from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY, category_from_token
 from group_admin import register_group_admin_handlers, handle_group_text
 from ai_router import chat as router_chat, configured_provider_names, AIProviderError
+from bridge_client import AzControlBridge
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -104,6 +105,8 @@ computer_mode_users = set()
 script_jobs = {}
 computer_sessions = {}
 dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
+bridge_protection_enabled = False
+bridge_client = None
 
 # ============== الشخصيات ==============
 PERSONALITIES = {
@@ -1199,6 +1202,27 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.effective_message.reply_text("تم استلام طلب لوحة عز.")
 
 
+async def handle_bridge_action(action: dict):
+    global bridge_protection_enabled
+    action_name = str(action.get("action", ""))
+    if action_name == "request_health":
+        return {"detail": f"bot=online version={BOT_VERSION} uptime={int(time.time() - bot_start_time)}s"}
+    if action_name == "refresh_catalog":
+        return {"detail": f"catalog_count={len(SERVICE_BY_KEY)} categories={len(catalog_categories())}"}
+    if action_name == "enable_protection":
+        bridge_protection_enabled = True
+        return {"detail": "group_protection=enabled"}
+    if action_name == "disable_protection":
+        bridge_protection_enabled = False
+        return {"detail": "group_protection=disabled"}
+    if action_name in {"prepare_505f", "prepare_505c"}:
+        # A web request must not activate a personal execution session without a Telegram-user binding.
+        return {"detail": f"{action_name}=accepted_for_manual_binding; telegram_user_binding_required"}
+    if action_name == "open_service":
+        return {"detail": "service_request_recorded"}
+    raise ValueError("unsupported bridge action")
+
+
 async def post_init(app):
     commands = [
         BotCommand("start", "بدء البوت"),
@@ -1258,9 +1282,24 @@ async def post_init(app):
         BotCommand("505b", "تعطيل جميع الأوضاع"),
     ]
     await app.bot.set_my_commands(commands)
+    global bridge_client
+    bridge_client = AzControlBridge(handle_bridge_action)
+    await bridge_client.start()
+    await bridge_client.publish_states([
+        {"serviceKey": "bot", "status": "online", "provider": "python-telegram-bot", "detail": BOT_VERSION},
+        {"serviceKey": "catalog", "status": "online", "provider": "service_catalog", "detail": str(len(SERVICE_BY_KEY))},
+        {"serviceKey": "ai", "status": "online" if configured_provider_names() else "unknown", "provider": ",".join(configured_provider_names()) or "unknown", "detail": AI_PROVIDER},
+        {"serviceKey": "protection", "status": "online" if bridge_protection_enabled else "unknown", "provider": "group_admin", "detail": "dashboard_toggle"},
+    ])
+
+
+async def post_shutdown(app):
+    if bridge_client:
+        await bridge_client.stop()
+
 
 def run_telegram_bot():
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).post_shutdown(post_shutdown).build()
     
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))

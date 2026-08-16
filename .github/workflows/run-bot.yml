@@ -37,6 +37,9 @@ jobs:
       NODE_SERVER_URL: http://127.0.0.1:3000
       AZ_AGENT_URL: http://127.0.0.1:8787
       AZ_AGENT_TOKEN: ${{ secrets.AZ_AGENT_TOKEN }}
+      AZ_CONTROL_API_URL: ${{ vars.AZ_CONTROL_API_URL }}
+      AZ_CONTROL_BRIDGE_TOKEN: ${{ secrets.AZ_CONTROL_BRIDGE_TOKEN }}
+      AZ_CONTROL_POLL_SECONDS: ${{ vars.AZ_CONTROL_POLL_SECONDS || '10' }}
       NODE_ENV: production
     steps:
       - name: Checkout
