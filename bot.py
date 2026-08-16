@@ -35,6 +35,7 @@ from features import register_feature_handlers, handle_feature_text
 from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
 from group_admin import register_group_admin_handlers, handle_group_text
+from ai_router import chat as router_chat, configured_provider_names, AIProviderError
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -294,8 +295,8 @@ def validate_configuration():
     missing = []
     if not BOT_TOKEN:
         missing.append("BOT_TOKEN")
-    if not GROQ_API_KEY:
-        missing.append("GROQ_API_KEY")
+    if not configured_provider_names():
+        missing.append("one AI provider: OPENROUTER_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or local Ollama")
     if not DEVELOPER_IDS:
         logger.warning("DEVELOPER_IDS is empty; developer commands are disabled")
     if missing:
@@ -403,13 +404,12 @@ async def get_ai_response(uid, text):
             messages.append({"role": "user", "content": f"تابع هذه المهمة الآن: {continuation}"})
         else:
             messages.append({"role": "user", "content": text})
-        response = ""
-        if AI_PROVIDER == "deepseek":
-            response = await asyncio.to_thread(ask_deepseek, messages)
-        if not response and GROQ_API_KEY:
-            response = await asyncio.to_thread(ask_groq, messages)
-        if not response:
-            response = "لم يتم إعداد مزود الذكاء الاصطناعي بعد. أضف DEEPSEEK_API_KEY أو GROQ_API_KEY إلى البيئة."
+        try:
+            response, provider_name = await asyncio.to_thread(router_chat, messages, preferred=AI_PROVIDER)
+            logger.info("AI response served by provider=%s", provider_name)
+        except AIProviderError as exc:
+            logger.error("AI router error: %s", exc)
+            response = "لم يتوفر مزود ذكاء حاليًا. فعّل OpenRouter أو DeepSeek أو Groq أو Ollama ثم أعد المحاولة."
         conversation_history[uid].extend([
             {"role": "user", "content": text},
             {"role": "assistant", "content": response},
