@@ -82,6 +82,8 @@ user_rate = defaultdict(list)
 banned_users = set()
 user_personality = {}
 conversation_history = defaultdict(list)
+# آخر مهمة أو سؤال يحتاج متابعة؛ تُستخدم لاستئناف الحوار عند «نعم» أو «تابع».
+pending_followups = {}
 user_stats = defaultdict(lambda: {"messages": 0, "start_time": time.time()})
 bot_stats = {"messages": 0, "users": set(), "errors": 0}
 
@@ -323,7 +325,10 @@ def get_system_message(uid):
         "لا تكرر السؤال ولا تبدأ موضوعًا جديدًا إذا كان المستخدم يتابع موضوعًا قائمًا. "
         "إذا كان الموقف مضحكًا فاستخدم: هههههههههههههههههههههههههههههههههه فقط.\n"
         "أنت عز، وكيل محادثي مستمر. حافظ على سياق المحادثة، "
-        "حوّل الطلبات متعددة الخطوات إلى خطة، وتابع المهمة بعد كل رسالة. "
+        "حوّل الطلبات متعددة الخطوات إلى خطوات عملية ونفّذ الخطوة التالية مباشرة إذا توفرت المعلومات. "
+        "لا تسأل هل تريد المتابعة بعد أن يوافق المستخدم أو يحدد المطلوب؛ نفّذ ثم أعرض النتيجة. "
+        "لا تكرر طلبًا سبق أن أجاب عنه المستخدم، ولا تعد إرسال قائمة طويلة إذا طلبها بوضوح. "
+        "اسأل فقط عن معلومة ناقصة فعلًا أو عن تأكيد إضافي لعملية عالية الخطورة مثل الحظر الجماعي أو الدفع أو حذف بيانات نهائي. "
         "لا تدّعِ تنفيذ تكامل أو تشغيل سكربت ما لم تؤكده النتيجة. "
         "التكاملات تعرض متطلباتها قبل الربط، والعمليات الحساسة تحتاج تأكيدًا صريحًا. "
         "تشغيل Python يتم فقط داخل عزل محدود وليس على النظام المضيف.\n"
@@ -380,9 +385,16 @@ def ask_groq(messages):
 
 async def get_ai_response(uid, text):
     try:
+        normalized = " ".join(text.strip().lower().split())
+        affirmative = normalized in {"نعم", "اي", "أي", "نعم تابع", "تابع", "اكمل", "أكمل", "نفذ", "نفّذ", "موافق"}
+        continuation = pending_followups.pop(uid, None) if affirmative else None
         messages = [{"role": "system", "content": get_system_message(uid)}]
         messages.extend(conversation_history[uid][-MAX_HISTORY:])
-        messages.append({"role": "user", "content": text})
+        if continuation:
+            messages.append({"role": "system", "content": "المستخدم وافق على آخر إجراء. لا تعِد السؤال. تابع تنفيذ الإجراء المحدد، أو اذكر المعلومة الوحيدة الناقصة بصيغة مباشرة."})
+            messages.append({"role": "user", "content": f"تابع هذه المهمة الآن: {continuation}"})
+        else:
+            messages.append({"role": "user", "content": text})
         response = ""
         if AI_PROVIDER == "deepseek":
             response = await asyncio.to_thread(ask_deepseek, messages)
@@ -395,6 +407,9 @@ async def get_ai_response(uid, text):
             {"role": "assistant", "content": response},
         ])
         conversation_history[uid] = conversation_history[uid][-MAX_HISTORY * 2:]
+        # إذا انتهى الرد بسؤال متابعة، نحفظ آخر طلب حتى تعني «نعم» الاستئناف لا بدء موضوع جديد.
+        if response.rstrip().endswith(("؟", "?")):
+            pending_followups[uid] = text if not continuation else continuation
         return response
     except Exception:
         logger.exception("AI response error")
