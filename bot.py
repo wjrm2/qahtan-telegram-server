@@ -1034,6 +1034,8 @@ async def post_init(app):
         BotCommand("ban", "حظر عضو"),
         BotCommand("unban", "فك الحظر"),
         BotCommand("kick", "طرد عضو"),
+        BotCommand("promote", "رفع عضو مشرفًا"),
+        BotCommand("demote", "خفض صلاحيات مشرف"),
         BotCommand("del", "حذف رسالة"),
         BotCommand("pin", "تثبيت رسالة"),
         BotCommand("unpin", "إلغاء التثبيت"),

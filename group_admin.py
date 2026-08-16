@@ -64,7 +64,7 @@ async def group_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "أوامر إدارة القروب:\n"
         "/gstatus حالة القروب\n/gadmins المشرفون\n/gid المعرفات\n"
         "/warn تحذير و /warnings الإنذارات\n/mute [دقائق] كتم\n/unmute فك الكتم\n"
-        "/ban حظر و /unban فك الحظر\n/kick طرد\n/del حذف رسالة بالرد\n"
+        "/ban حظر و /unban فك الحظر\n/kick طرد\n/promote رفع مشرف و /demote خفضه\n/del حذف رسالة بالرد\n"
         "/pin تثبيت بالرد و /unpin إلغاء التثبيت\n/lock قفل الكتابة و /unlock فتحها\n"
         "/welcome تشغيل الترحيب أو /welcome off\n\n" + _target_help()
     )
@@ -167,6 +167,63 @@ async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(f"تم حظر {user.first_name}.")
 
 
+async def promote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await _caller_admin(update, context) or not await _bot_admin(update, context, "can_promote_members"):
+        return
+    user = _target(update, context)
+    if not user:
+        await update.effective_message.reply_text("استخدم الأمر بالرد على رسالة العضو؛ Telegram لا يحوّل @username إلى ID عبر Bot API.")
+        return
+    if user.id == update.effective_user.id:
+        await update.effective_message.reply_text("لا يمكنك رفع نفسك.")
+        return
+    try:
+        await context.bot.promote_chat_member(
+            chat_id=update.effective_chat.id,
+            user_id=user.id,
+            can_manage_chat=False,
+            can_change_info=False,
+            can_post_messages=False,
+            can_edit_messages=False,
+            can_delete_messages=False,
+            can_invite_users=True,
+            can_restrict_members=True,
+            can_pin_messages=False,
+            can_promote_members=False,
+            can_manage_video_chats=False,
+        )
+        await update.effective_message.reply_text(f"تم رفع {user.first_name} مشرفًا بصلاحيات محدودة.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر رفع العضو: {exc}")
+
+
+async def demote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await _caller_admin(update, context) or not await _bot_admin(update, context, "can_promote_members"):
+        return
+    user = _target(update, context)
+    if not user:
+        await update.effective_message.reply_text("استخدم الأمر بالرد على رسالة المشرف.")
+        return
+    try:
+        await context.bot.promote_chat_member(
+            chat_id=update.effective_chat.id,
+            user_id=user.id,
+            can_manage_chat=False,
+            can_change_info=False,
+            can_post_messages=False,
+            can_edit_messages=False,
+            can_delete_messages=False,
+            can_invite_users=False,
+            can_restrict_members=False,
+            can_pin_messages=False,
+            can_promote_members=False,
+            can_manage_video_chats=False,
+        )
+        await update.effective_message.reply_text(f"تم خفض صلاحيات {user.first_name}.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر خفض الصلاحيات: {exc}")
+
+
 async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _caller_admin(update, context) or not await _bot_admin(update, context, "can_restrict_members"):
         return
@@ -235,7 +292,7 @@ def register_group_admin_handlers(application) -> None:
     commands = {
         "ghelp": group_help, "gstatus": group_status, "gadmins": list_admins,
         "warn": warn, "warnings": warnings, "mute": mute, "unmute": unmute,
-        "ban": ban, "unban": unban, "kick": kick, "del": delete_message,
+        "ban": ban, "unban": unban, "kick": kick, "promote": promote, "demote": demote, "del": delete_message,
         "pin": pin, "unpin": unpin, "lock": lock, "unlock": unlock,
     }
     for name, handler in commands.items():
