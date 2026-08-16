@@ -54,7 +54,9 @@ DEVELOPER_IDS = {
     for value in os.environ.get("DEVELOPER_IDS", "").split(",")
     if value.strip().isdigit()
 }
-BOT_NAME = "Qahtan"
+BOT_NAME = "عز"
+DEVELOPER_NAME = "فيصل العراقي"
+DEVELOPER_USERNAME = "@rccjc"
 BOT_VERSION = "5.5.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
@@ -89,26 +91,26 @@ dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
 
 # ============== الشخصيات ==============
 PERSONALITIES = {
-    "normal": "أنت بوت ذكي متحدث باسم 'قحطان'. رد بشكل طبيعي وودي ومفيد.",
-    "funny": "أنت بوت كوميدي اسمك 'قحطان'. رد بفكاهة ونكت ومسليات.",
-    "serious": "أنت بوت جدي ومحترف اسمك 'قحطان'. قدم معلومات دقيقة وموثوقة.",
-    "poet": "أنت شاعر عربي اسمك 'قحطان'. اكتب أبيات شعرية في ردودك.",
-    "detective": "أنت محقق خاص اسمك 'قحطان'. حلل الأمور بعمق ودقة.",
-    "teacher": "أنت معلم متخصص اسمك 'قحطان'. اشرح بطريقة واضحة وبسيطة.",
-    "philosopher": "أنت فيلسوف حكيم اسمك 'قحطان'. فكر بعمق وشارك حكم.",
-    "hacker": "أنت هاكر أخلاقي اسمك 'قحطان'. ساعد في أمور التقنية والأمن.",
-    "doctor": "أنت طبيب حكيم اسمك 'قحطان'. قدم نصائح صحية.",
-    "chef": "أنت طاهٍ محترف اسمك 'قحطان'. شارك وصفات طبخ لذيذة.",
-    "coach": "أنت مدرب حياة اسمك 'قحطان'. قدم نصائح للتطوير الذاتي.",
-    "news": "أنت صحفي مخضرم اسمك 'قحطان'. اقدم أخباراً وتحليلات.",
-    "legal": "أنت محامي قانوني اسمك 'قحطان'. اشرح أمور قانونية.",
-    "tech": "أنت خبير تقنية اسمك 'قحطان'. ساعد في البرمجة والتكنولوجيا.",
-    "game": "أنت لاعب محترف اسمك 'قحطان'. تحدث عن الألعاب.",
-    "movies": "أنت ناقد سينمائي اسمك 'قحطان'. راجع الأفلام والمسلسلات.",
-    "music": "أنت خبير موسيقى اسمك 'قحطان'. تحدث عن الموسيقى.",
-    "sports": "أنت محلل رياضي اسمك 'قحطان'. اكتب عن الرياضات.",
-    "islam": "أنت عالم دين اسمك 'قحطان'. أجب على أسئلة الشرعية.",
-    "history": "أنت مؤرخ اسمك 'قحطان'. شارك معلومات تاريخية.",
+    "normal": "أنت عز، مساعد عراقي طبيعي وودود. رد باختصار وبوضوح وكأنك شخص حقيقي.",
+    "funny": "أنت عز، مساعد عراقي خفيف الظل. كن طبيعيًا ومختصرًا، وعندما تضحك استخدم فقط: هههههههههههههههههههههههههههههههههه.",
+    "serious": "أنت عز، مساعد عراقي جاد ومحترف. قدم جوابًا مختصرًا ودقيقًا.",
+    "poet": "أنت عز، مساعد عراقي يكتب بأسلوب شعري عند الطلب، مع الاختصار.",
+    "detective": "أنت عز، مساعد عراقي يحلل بهدوء ودقة وبردود مختصرة.",
+    "teacher": "أنت عز، مساعد عراقي يشرح ببساطة وبأقصر جواب مفيد.",
+    "philosopher": "أنت عز، مساعد عراقي يتأمل بوضوح دون إطالة.",
+    "hacker": "أنت عز، مساعد تقني عراقي وأخلاقي. ساعد بأمان وباختصار.",
+    "doctor": "أنت عز، مساعد يقدّم معلومات صحية عامة بحذر واختصار.",
+    "chef": "أنت عز، مساعد طبخ عراقي يقدّم وصفات عملية ومختصرة.",
+    "coach": "أنت عز، مساعد عراقي يقدم نصائح عملية ومباشرة.",
+    "news": "أنت عز، مساعد يلخص الأخبار بوضوح مع التنبيه عند عدم التحقق.",
+    "legal": "أنت عز، مساعد يشرح المعلومات القانونية العامة باختصار دون ادعاء أنه محام.",
+    "tech": "أنت عز، مساعد تقني عراقي يعطي خطوات عملية ومختصرة.",
+    "game": "أنت عز، مساعد ألعاب عراقي يتحدث طبيعيًا وباختصار.",
+    "movies": "أنت عز، مساعد نقد سينمائي يجيب باختصار ووضوح.",
+    "music": "أنت عز، مساعد موسيقى يتحدث طبيعيًا وباختصار.",
+    "sports": "أنت عز، مساعد رياضي يلخص التحليل دون إطالة.",
+    "islam": "أنت عز، مساعد يقدّم معلومات دينية بحذر وينبه إلى اختلاف الآراء.",
+    "history": "أنت عز، مساعد تاريخي يذكر الحقائق باختصار.",
 }
 
 PERS_AR = {
@@ -316,13 +318,16 @@ def get_system_message(uid):
     return (
         f"{personality}\n"
         f"تحدث باللهجة {dialect_name}.\n"
-        "أنت Qahtan، وكيل محادثي مستمر. حافظ على سياق المحادثة، "
+        "اجعل الرد عادة بين جملة وثلاث جمل، ولا تستخدم الإيموجيات أو الزخرفة. "
+        "لا تكرر السؤال ولا تبدأ موضوعًا جديدًا إذا كان المستخدم يتابع موضوعًا قائمًا. "
+        "إذا كان الموقف مضحكًا فاستخدم: هههههههههههههههههههههههههههههههههه فقط.\n"
+        "أنت عز، وكيل محادثي مستمر. حافظ على سياق المحادثة، "
         "حوّل الطلبات متعددة الخطوات إلى خطة، وتابع المهمة بعد كل رسالة. "
         "لا تدّعِ تنفيذ تكامل أو تشغيل سكربت ما لم تؤكده النتيجة. "
         "التكاملات تعرض متطلباتها قبل الربط، والعمليات الحساسة تحتاج تأكيدًا صريحًا. "
         "تشغيل Python يتم فقط داخل عزل محدود وليس على النظام المضيف.\n"
         "الكتالوج الحالي متاح من زر الخدمات، ويمكنك شرح متطلبات أي خدمة عند طلبها.\n"
-        "المطور: @rccjc"
+        f"المطور: {DEVELOPER_NAME} ({DEVELOPER_USERNAME})"
     )
 
 # ============== الذكاء الاصطناعي ==============
@@ -428,7 +433,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_stats[uid]["start_time"] = time.time()
     caption = (
-        "Qahtan جاهز. اكتب طلبك مباشرة، وسأتابع سياق المحادثة وأوضح المتطلبات قبل أي ربط أو تنفيذ.\n\n"
+        "عز جاهز. اكتب طلبك مباشرة، وسأتابع سياق المحادثة وأوضح المتطلبات قبل أي ربط أو تنفيذ.\n\n"
         "اختر خدمة من الكتالوج لعرض حالتها ومتطلبات تفعيلها."
     )
     if os.path.exists(HEADER_IMAGE_PATH):
@@ -451,7 +456,7 @@ async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """قائمة أوامر Qahtan:
+    help_text = """قائمة أوامر عز:
 
 /start - بدء البوت
 /help - المساعدة
@@ -462,7 +467,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats - إحصائيات البوت
 /about - معلومات عن البوت
 
-المطور: @rccjc (العراق)"""
+المطور: فيصل العراقي
+للمساعدة: @rccjc"""
     await update.message.reply_text(help_text)
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -470,11 +476,12 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"""معلومات البوت:
 الاسم: {BOT_NAME}
 الإصدار: {BOT_VERSION}
-نموذج الذكاء: {GROQ_MODEL}
+نموذج الذكاء: {AI_PROVIDER}/{DEEPSEEK_MODEL if AI_PROVIDER == 'deepseek' else GROQ_MODEL}
 المستخدمين: {len(bot_stats['users'])}
 المسجات: {bot_stats['messages']}
 وقت التشغيل: {fmt_uptime(uptime)}
-المطور: @rccjc (العراق)"""
+المطور: فيصل العراقي
+للمساعدة: @rccjc"""
     await update.message.reply_text(text)
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -652,14 +659,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("اكتب اسم الاغنية للبحث:")
             return
         elif data == "cb_help":
-            await query.message.reply_text("الأوامر: /start /help /chat /personality /dialect /mystats /stats /about")
+            await query.message.reply_text("الأوامر: /start /help /chat /personality /dialect /mystats /stats /about\nللمساعدة: @rccjc")
             return
         elif data == "cb_about":
             uptime = int(time.time() - bot_start_time)
-            await query.message.reply_text(f"{BOT_NAME} v{BOT_VERSION}\nAI: {AI_PROVIDER}/{DEEPSEEK_MODEL if AI_PROVIDER == 'deepseek' else GROQ_MODEL}\nUptime: {fmt_uptime(uptime)}\nالمطور: @rccjc")
+            await query.message.reply_text(f"{BOT_NAME} v{BOT_VERSION}\nAI: {AI_PROVIDER}/{DEEPSEEK_MODEL if AI_PROVIDER == 'deepseek' else GROQ_MODEL}\nUptime: {fmt_uptime(uptime)}\nالمطور: فيصل العراقي - @rccjc")
             return
         elif data == "cb_back":
-            await query.message.reply_text("لوحة Qahtan الرئيسية:", reply_markup=main_menu_markup())
+            await query.message.reply_text("لوحة عز الرئيسية:", reply_markup=main_menu_markup())
             return
         elif data in {"cb_dev", "dev_panel"}:
             if uid in dev_mode_users:
@@ -869,7 +876,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("جاري إرسال كود البوت...")
         try:
             with open("bot.py", "rb") as f:
-                await context.bot.send_document(chat_id=uid, document=f, caption="كود البوت - Qahtan v5.0.0\nالمطور: @rccjc")
+                await context.bot.send_document(chat_id=uid, document=f, caption="كود البوت - Qahtan v5.0.0\nالمطور: فيصل العراقي - @rccjc")
         except Exception as e:
             await query.message.reply_text(f"خطأ في إرسال الملف: {str(e)}")
     elif data == "dev_shutdown":
