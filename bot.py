@@ -13,6 +13,8 @@ import shutil
 import socket
 import sys
 import zipfile
+import tempfile
+from pathlib import Path
 from io import BytesIO
 from threading import Thread
 from collections import defaultdict
@@ -62,6 +64,8 @@ BOT_VERSION = "5.5.0"
 PORT = int(os.environ.get("BOT_PORT", os.environ.get("PORT", 8080)))
 NODE_SERVER_PORT = int(os.environ.get("NODE_SERVER_PORT", 3000))
 NODE_SERVER_URL = os.environ.get("NODE_SERVER_URL", f"http://127.0.0.1:{NODE_SERVER_PORT}").rstrip("/")
+AZ_AGENT_URL = os.environ.get("AZ_AGENT_URL", "http://127.0.0.1:8787").rstrip("/")
+AZ_AGENT_TOKEN = os.environ.get("AZ_AGENT_TOKEN", "").strip()
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 ASSET_DIR = os.path.join(PROJECT_ROOT, "assets")
 MENU_ANIMATION_PATH = os.path.join(ASSET_DIR, "qahtan_menu.gif")
@@ -88,8 +92,11 @@ user_stats = defaultdict(lambda: {"messages": 0, "start_time": time.time()})
 bot_stats = {"messages": 0, "users": set(), "errors": 0}
 
 # ============== وضع المطور ==============
-DEVELOPER_MODE_CODE = "505"
+DEVELOPER_MODE_CODE = os.environ.get("DEVELOPER_MODE_CODE", "505")
+SCRIPT_MODE_CODE = "505F"
 dev_mode_users = set()
+script_mode_users = set()
+script_jobs = {}
 dev_pending_code = {}  # المستخدمين الذين يدخلون الكود
 
 # ============== الشخصيات ==============
@@ -902,6 +909,73 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os._exit(0)
 
 # ============== معالجة الرسائل ==============
+async def _script_mode_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    if uid not in DEVELOPER_IDS:
+        await update.message.reply_text("هذا الوضع متاح للمطور فقط.")
+        return
+    script_mode_users.add(uid)
+    await update.message.reply_text("تم فتح واجهة تشغيل السكربتات. أرسل ملف Python بصيغة .py، وسأرسله إلى وكيل az- المعزول وأعرض الحالة والمخرجات.")
+
+
+async def _poll_script_job(bot, chat_id: int, uid: int, job_id: str) -> None:
+    headers = {"Authorization": f"Bearer {AZ_AGENT_TOKEN}"}
+    for _ in range(90):
+        await asyncio.sleep(2)
+        try:
+            response = await asyncio.to_thread(requests.get, f"{AZ_AGENT_URL}/jobs/{job_id}", headers=headers, timeout=10)
+            if not response.ok:
+                continue
+            data = response.json()
+            if data.get("status") in {"completed", "failed"}:
+                script_jobs.pop(uid, None)
+                text = (f"انتهت المهمة: {data.get('reason', data.get('status'))}\\n"
+                        f"رمز الخروج: {data.get('returncode', 'غير متاح')}\\n"
+                        f"المخرجات:\\n{data.get('stdout', '')[-3000:]}\\n"
+                        f"الأخطاء:\\n{data.get('stderr', '')[-3000:]}")
+                await bot.send_message(chat_id=chat_id, text=text[:3900])
+                return
+        except Exception as exc:
+            logger.warning("Script job polling failed: %s", exc)
+    await bot.send_message(chat_id=chat_id, text="انتهت مهلة متابعة المهمة. استخدم 505F لإرسالها من جديد.")
+
+
+async def _handle_script_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    uid = update.effective_user.id
+    if uid not in script_mode_users or not update.message or not update.message.document:
+        return False
+    document = update.message.document
+    filename = document.file_name or "script.py"
+    if not filename.endswith(".py"):
+        await update.message.reply_text("أرسل ملف Python بامتداد .py فقط في هذه النسخة.")
+        return True
+    if not AZ_AGENT_TOKEN:
+        await update.message.reply_text("وكيل az- غير مفعّل: أضف AZ_AGENT_TOKEN إلى GitHub Secrets ثم أعد التشغيل.")
+        return True
+    if uid in script_jobs:
+        await update.message.reply_text("هناك مهمة قيد المتابعة لهذا الحساب. انتظر نتيجتها أولًا.")
+        return True
+    temp_path = Path(tempfile.gettempdir()) / f"az-upload-{uid}-{document.file_unique_id}.py"
+    try:
+        tg_file = await context.bot.get_file(document.file_id)
+        await tg_file.download_to_drive(custom_path=str(temp_path))
+        payload = {"filename": filename, "content_b64": base64.b64encode(temp_path.read_bytes()).decode(), "requirements": [], "timeout_seconds": 120, "network": False}
+        response = await asyncio.to_thread(requests.post, f"{AZ_AGENT_URL}/jobs", headers={"Authorization": f"Bearer {AZ_AGENT_TOKEN}"}, json=payload, timeout=20)
+        if not response.ok:
+            await update.message.reply_text(f"تعذر إرسال السكربت إلى وكيل az-: {response.text[:500]}")
+            return True
+        job_id = response.json().get("job_id")
+        script_jobs[uid] = job_id
+        await update.message.reply_text(f"تم استلام {filename}. بدأت المهمة داخل العزل، وسأرسل المخرجات والأخطاء عند الانتهاء.")
+        context.application.create_task(_poll_script_job(context.bot, update.effective_chat.id, uid, job_id))
+    except Exception as exc:
+        logger.exception("Script upload failed")
+        await update.message.reply_text(f"تعذر تشغيل الملف: {exc}")
+    finally:
+        temp_path.unlink(missing_ok=True)
+    return True
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -909,10 +983,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text.strip()
     uid = update.effective_user.id
 
+    if msg.replace("/", "").strip().lower() == "505f":
+        await _script_mode_menu(update, context)
+        return
+
     if await handle_feature_text(update, context):
         return
 
     if await handle_group_text(update, context):
+        return
+
+    if await _handle_script_document(update, context):
         return
     
     if uid in banned_users:
@@ -1078,6 +1159,7 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("dev", dev_command))
+    app.add_handler(CommandHandler("505f", _script_mode_menu))
     app.add_handler(CommandHandler("server", server_command))
     app.add_handler(CommandHandler("about", about_command))
     app.add_handler(CommandHandler("stats", stats_command))
@@ -1090,6 +1172,7 @@ def run_telegram_bot():
     register_feature_handlers(app)
     register_group_admin_handlers(app)
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.Document.ALL, _handle_script_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     logger.info(f"{BOT_NAME} v{BOT_VERSION} شغال!")
