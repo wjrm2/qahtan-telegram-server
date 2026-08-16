@@ -32,7 +32,7 @@ LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
 from utility_features import register_utility_handlers
 from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
-from group_admin import register_group_admin_handlers
+from group_admin import register_group_admin_handlers, handle_group_text
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -894,6 +894,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     if await handle_feature_text(update, context):
+        return
+
+    if await handle_group_text(update, context):
         return
     
     if uid in banned_users:

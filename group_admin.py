@@ -168,8 +168,11 @@ async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         await update.effective_message.reply_text(_target_help())
         return
-    await context.bot.ban_chat_member(update.effective_chat.id, user.id)
-    await update.effective_message.reply_text(f"تم حظر {user.first_name}.")
+    try:
+        await context.bot.ban_chat_member(update.effective_chat.id, user.id)
+        await update.effective_message.reply_text(f"تم حظر {user.first_name}.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر الحظر: {exc}")
 
 
 def _rights_profile(profile: str) -> dict:
@@ -331,9 +334,12 @@ async def kick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         await update.effective_message.reply_text(_target_help())
         return
-    await context.bot.ban_chat_member(update.effective_chat.id, user.id)
-    await context.bot.unban_chat_member(update.effective_chat.id, user.id, only_if_banned=True)
-    await update.effective_message.reply_text(f"تم طرد {user.first_name}.")
+    try:
+        await context.bot.ban_chat_member(update.effective_chat.id, user.id)
+        await context.bot.unban_chat_member(update.effective_chat.id, user.id, only_if_banned=True)
+        await update.effective_message.reply_text(f"تم طرد {user.first_name}.")
+    except TelegramError as exc:
+        await update.effective_message.reply_text(f"تعذر الطرد: {exc}")
 
 
 async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -375,6 +381,31 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await context.bot.set_chat_permissions(update.effective_chat.id, _all_permissions())
     await update.effective_message.reply_text("تم فتح الكتابة للأعضاء.")
+
+
+async def handle_group_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Handle explicit Arabic admin phrases; never infer actions from AI text."""
+    if not update.effective_message or not update.effective_message.text:
+        return False
+    text = " ".join(update.effective_message.text.strip().split())
+    actions = {
+        "رفع مشرف بكامل الصلاحيات": promote_full,
+        "تنزيل مشرف بكامل الصلاحيات": demote_full,
+        "رفع مشرف بصلاحية الطرد": promote_kick,
+        "تنزيل مشرف بصلاحية الطرد": demote_kick,
+        "رفع مشرف بصلاحية الحظر": promote_ban,
+        "تنزيل مشرف بصلاحية الحظر": demote_ban,
+        "رفع مشرف بصلاحية التقييد": promote_restrict,
+        "تنزيل مشرف بصلاحية التقييد": demote_restrict,
+        "حظر": ban, "طرد": kick, "كتم": mute, "فك الكتم": unmute,
+        "حذف الرسالة": delete_message, "تثبيت الرسالة": pin,
+        "إلغاء التثبيت": unpin, "قفل القروب": lock, "فتح القروب": unlock,
+    }
+    handler = actions.get(text)
+    if not handler:
+        return False
+    await handler(update, context)
+    return True
 
 
 def register_group_admin_handlers(application) -> None:
