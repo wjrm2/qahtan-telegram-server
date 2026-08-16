@@ -55,9 +55,11 @@ jobs:
           cache-dependency-path: node_server/package-lock.json
 
       - name: Install Ollama
+        if: ${{ vars.AI_PROVIDER == 'ollama' }}
         run: curl -fsSL https://ollama.com/install.sh | sh
 
       - name: Start Ollama and pull local model
+        if: ${{ vars.AI_PROVIDER == 'ollama' }}
         run: |
           nohup ollama serve > ollama.log 2>&1 &
           for i in {1..30}; do curl -fsS http://127.0.0.1:11434/api/tags && break || sleep 1; done
