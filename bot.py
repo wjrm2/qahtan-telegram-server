@@ -31,6 +31,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(PROJECT_ROOT, "bot.log")
 from features import register_feature_handlers, handle_feature_text
 from utility_features import register_utility_handlers
+from service_catalog import catalog_categories, catalog_page, service_text, catalog_check_text, SERVICE_BY_KEY
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
@@ -44,6 +45,10 @@ logger = logging.getLogger(__name__)
 # ============== الإعدادات ==============
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "deepseek").strip().lower()
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
 DEVELOPER_IDS = {
     int(value.strip())
     for value in os.environ.get("DEVELOPER_IDS", "").split(",")
@@ -308,9 +313,41 @@ def get_system_message(uid):
     dialect_key = user_dialect.get(uid, "saudi")
     dialect_name = DIALECTS_AR.get(dialect_key, "سعودي")
     personality = PERSONALITIES.get(pers_key, PERSONALITIES["normal"])
-    return f"{personality}\nتحدث باللهجة {dialect_name}.\nالمطور: @rccjc"
+    return (
+        f"{personality}\n"
+        f"تحدث باللهجة {dialect_name}.\n"
+        "أنت Qahtan، وكيل محادثي مستمر. حافظ على سياق المحادثة، "
+        "حوّل الطلبات متعددة الخطوات إلى خطة، وتابع المهمة بعد كل رسالة. "
+        "لا تدّعِ تنفيذ تكامل أو تشغيل سكربت ما لم تؤكده النتيجة. "
+        "التكاملات تعرض متطلباتها قبل الربط، والعمليات الحساسة تحتاج تأكيدًا صريحًا. "
+        "تشغيل Python يتم فقط داخل عزل محدود وليس على النظام المضيف.\n"
+        "الكتالوج الحالي متاح من زر الخدمات، ويمكنك شرح متطلبات أي خدمة عند طلبها.\n"
+        "المطور: @rccjc"
+    )
 
 # ============== الذكاء الاصطناعي ==============
+def ask_openai_compatible(url, api_key, model, messages):
+    if not api_key:
+        return ""
+    try:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": model, "messages": messages, "max_tokens": 900, "temperature": 0.6}
+        response = requests.post(url, headers=headers, json=payload, timeout=45)
+        if response.ok:
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+        logger.error("AI provider error %s: %s", response.status_code, response.text[:300])
+    except requests.RequestException as exc:
+        logger.error("AI provider network error: %s", exc)
+    except Exception:
+        logger.exception("Unexpected AI provider error")
+    return ""
+
+
+def ask_deepseek(messages):
+    return ask_openai_compatible(f"{DEEPSEEK_BASE_URL}/chat/completions", DEEPSEEK_API_KEY, DEEPSEEK_MODEL, messages)
+
+
 def ask_groq(messages):
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -340,7 +377,13 @@ async def get_ai_response(uid, text):
         messages = [{"role": "system", "content": get_system_message(uid)}]
         messages.extend(conversation_history[uid][-MAX_HISTORY:])
         messages.append({"role": "user", "content": text})
-        response = await asyncio.to_thread(ask_groq, messages)
+        response = ""
+        if AI_PROVIDER == "deepseek":
+            response = await asyncio.to_thread(ask_deepseek, messages)
+        if not response and GROQ_API_KEY:
+            response = await asyncio.to_thread(ask_groq, messages)
+        if not response:
+            response = "لم يتم إعداد مزود الذكاء الاصطناعي بعد. أضف DEEPSEEK_API_KEY أو GROQ_API_KEY إلى البيئة."
         conversation_history[uid].extend([
             {"role": "user", "content": text},
             {"role": "assistant", "content": response},
@@ -367,38 +410,35 @@ async def dev_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("أدخل رمز المطور:")
         dev_pending_code[uid] = "dev_code"
 
+HEADER_IMAGE_PATH = os.path.join(ASSET_DIR, "qahtan_header.gif")
+
+
+def main_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("💬 متابعة المحادثة", callback_data="cb_chat")],
+        [InlineKeyboardButton("🔗 كتالوج الخدمات والمتطلبات", callback_data="svc_catalog")],
+        [InlineKeyboardButton("🧩 الميزات", callback_data="feature:menu"), InlineKeyboardButton("🎵 بحث أغاني", callback_data="cb_music")],
+        [InlineKeyboardButton("🧠 الشخصية", callback_data="cb_personality"), InlineKeyboardButton("🌐 اللهجة", callback_data="cb_dialect")],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="cb_mystats"), InlineKeyboardButton("❔ المساعدة", callback_data="cb_help")],
+        [InlineKeyboardButton("🛠️ لوحة المطور", callback_data="dev_panel")],
+    ])
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_stats[uid]["start_time"] = time.time()
-    
-    # Modern buttons with different layouts
-    kb = [
-        # Row 1 - Main actions
-        [InlineKeyboardButton("محادثة ذكية", callback_data="cb_chat")],
-        # Row 2 - Music
-        [InlineKeyboardButton("بحث اغاني", callback_data="cb_music")],
-        # Row 3 - Additional features
-        [InlineKeyboardButton("ميزات إضافية", callback_data="feature:menu")],
-        # Row 4 - Personalization
-        [InlineKeyboardButton("تغيير الشخصية", callback_data="cb_personality"), 
-         InlineKeyboardButton("تغيير اللهجة", callback_data="cb_dialect")],
-        # Row 4 - Info
-        [InlineKeyboardButton("إحصائياتي", callback_data="cb_mystats"), 
-         InlineKeyboardButton("مساعدة", callback_data="cb_help")],
-        # Row 5 - Developer
-        [InlineKeyboardButton("لوحة المطور", callback_data="dev_panel")],
-    ]
-    
-    # عرض GIF جون سنو فقط، مع إرفاق قائمة الأزرار نفسها دون نص ترحيبي.
-    if os.path.exists(MENU_ANIMATION_PATH):
+    caption = (
+        "Qahtan جاهز. اكتب طلبك مباشرة، وسأتابع سياق المحادثة وأوضح المتطلبات قبل أي ربط أو تنفيذ.\n\n"
+        "اختر خدمة من الكتالوج لعرض حالتها ومتطلبات تفعيلها."
+    )
+    if os.path.exists(HEADER_IMAGE_PATH):
         try:
-            with open(MENU_ANIMATION_PATH, "rb") as gif:
-                await update.message.reply_animation(animation=gif, reply_markup=InlineKeyboardMarkup(kb))
+            with open(HEADER_IMAGE_PATH, "rb") as image:
+                await update.message.reply_animation(animation=image, caption=caption, reply_markup=main_menu_markup())
             return
         except Exception:
-            logger.exception("Animated welcome failed")
-    # بديل عند تعذر تحميل GIF مع إبقاء الأزرار متاحة.
-    await update.message.reply_text("\u200b", reply_markup=InlineKeyboardMarkup(kb))
+            logger.exception("Header image failed")
+    await update.message.reply_text(caption, reply_markup=main_menu_markup())
 
 async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -518,6 +558,8 @@ PROJECT_ARCHIVE_FILES = (
     "node_server/package.json",
     "node_server/package-lock.json",
     "assets/qahtan_menu.gif",
+    "assets/qahtan_header.gif",
+    "service_catalog.py",
 )
 
 
@@ -578,8 +620,32 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     try:
+        if data == "svc_catalog":
+            await query.edit_message_text("🔗 كتالوج الخدمات\nاختر تصنيفًا لعرض الخدمات ومتطلبات الربط:", reply_markup=catalog_categories())
+            return
+        elif data == "svc_check":
+            await query.edit_message_text(catalog_check_text(), reply_markup=catalog_categories())
+            return
+        elif data.startswith("svc_cat:"):
+            category = data.split(":", 1)[1]
+            await query.edit_message_text(f"🔗 {category}\nاختر خدمة لعرض المتطلبات:", reply_markup=catalog_page(0, category))
+            return
+        elif data.startswith("svc_page:"):
+            parts = data.split(":", 2)
+            page = int(parts[1])
+            category = parts[2] if len(parts) > 2 else None
+            await query.edit_message_text("🔗 الخدمات\nاختر خدمة لعرض المتطلبات:", reply_markup=catalog_page(page, category))
+            return
+        elif data.startswith("svc:"):
+            service = SERVICE_BY_KEY.get(data.split(":", 1)[1])
+            if not service:
+                await query.edit_message_text("الخدمة غير موجودة في الكتالوج.", reply_markup=catalog_categories())
+            else:
+                await query.edit_message_text(service_text(service), parse_mode="HTML", reply_markup=catalog_page(0, service.category))
+            return
         if data == "cb_chat":
-            await query.message.reply_text("اكتب رسالتك وسأرد عليك فوراً!")
+            await query.message.reply_text("أرسل رسالتك أو تابع آخر مهمة؛ سأحافظ على سياق المحادثة السابقة.")
+
             return
         elif data == "cb_music":
             music_search_mode.add(uid)
@@ -590,20 +656,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif data == "cb_about":
             uptime = int(time.time() - bot_start_time)
-            await query.message.reply_text(f"{BOT_NAME} v{BOT_VERSION}\nAI: {GROQ_MODEL}\nUptime: {fmt_uptime(uptime)}\nالمطور: @rccjc")
+            await query.message.reply_text(f"{BOT_NAME} v{BOT_VERSION}\nAI: {AI_PROVIDER}/{DEEPSEEK_MODEL if AI_PROVIDER == 'deepseek' else GROQ_MODEL}\nUptime: {fmt_uptime(uptime)}\nالمطور: @rccjc")
             return
         elif data == "cb_back":
-            kb = [
-                [InlineKeyboardButton("محادثة ذكية", callback_data="cb_chat")],
-                [InlineKeyboardButton("بحث اغاني", callback_data="cb_music")],
-                [InlineKeyboardButton("ميزات إضافية", callback_data="feature:menu")],
-                [InlineKeyboardButton("تغيير الشخصية", callback_data="cb_personality"), 
-                 InlineKeyboardButton("تغيير اللهجة", callback_data="cb_dialect")],
-                [InlineKeyboardButton("إحصائياتي", callback_data="cb_mystats"), 
-                 InlineKeyboardButton("مساعدة", callback_data="cb_help")],
-                [InlineKeyboardButton("لوحة المطور", callback_data="cb_dev")],
-            ]
-            await query.message.reply_text("اختر:", reply_markup=InlineKeyboardMarkup(kb))
+            await query.message.reply_text("لوحة Qahtan الرئيسية:", reply_markup=main_menu_markup())
             return
         elif data in {"cb_dev", "dev_panel"}:
             if uid in dev_mode_users:
